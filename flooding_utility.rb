@@ -73,14 +73,28 @@ class FloodingUtil
     if @link_state_table[ls_packet.source_name] == nil
       @link_state_table[ls_packet.source_name] = ls_packet.seqNumb
       # Build graph
-
+      ls_packet.neighbors.keys.each do |(host, ip)| 
+        neighbor = GraphNode.new(@host, @ip)
+        cost = ls_packet[[host, ip]]
+        @global_top.addNode(neighbor)
+        @global_top.addEdge(init_node, neighbor, cost)
+      end
 	    
     # If link state is already in the table check its seq numb
     # against the recieved link state packet if it did change 
     # we want to update the table and flood
-    elsif @link_state_table[ls_packet.source_name] != ls_packet.seq_numb 
+    elsif @link_state_table[ls_packet.source_name] < ls_packet.seq_numb 
       # Update lsp and topology ls table and flood
-    
+      # Update link state table
+      @link_state_table[ls_packet.source_name] = ls_packet.seq_numb
+
+      # TODO - Update global topology graph 
+      deadNode = @global_top.getNode(ls_packet.source_name)
+      
+
+      # Flood network with packe
+      flood_neighbors(ls_packet)
+
     # If the recieved link state packet is in the table and
     # has the previously recorded sequence number we want
     # to drop the packet
