@@ -16,8 +16,10 @@ class GraphBuilder
 	# if and how many times a graph has been updated.
 	# ---------------------------------------------------
 	def initialize()
+		#GraphNode.hostname => GraphNode
 		@graph = Hash.new
 		@sequenceNumber = 0
+
 	end
 
 	# ----------------------------------
@@ -37,6 +39,16 @@ class GraphBuilder
 			@hostName = hostName
 			@ipAddress = ipAddress
 			@neighbors = neighbors
+
+			#used for dijkstras
+			@distance = nil
+			@parent = nil
+
+			#If it is directly connected to s then s can forward to this node
+			@is_forward_node = false
+			#the GraphNode from which a source node will have to forward to 
+			#if it wants to reach this node
+			@forward_node = nil
 		end
 
 		# -----------------------------------------
@@ -97,6 +109,9 @@ class GraphBuilder
 	# --------------------------------------------------------------------
 	def addEdge(startNode, endNode, edgeCost)
 		newEdge = GraphEdge.new(endNode, edgeCost)
+
+		#TODO Nick shouldn't you add the edge to endNode
+		#Or are you doing it somewhere else?
 
 		if @graph[startNode.hostName] == nil
 			startNode.neighbors = Set.new([newEdge])
@@ -162,7 +177,6 @@ class GraphBuilder
 	def getNode(hostName)
 		return @graph.fetch(hostName, nil)
 	end
-
 
 	# creates getter for the graph hash
 	# and setter/getter for sequence number
