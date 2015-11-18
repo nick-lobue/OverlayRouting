@@ -1,4 +1,5 @@
 require 'socket'
+require 'link_state_packet'
 
 class FloodingUtil
   
@@ -22,14 +23,15 @@ class FloodingUtil
     @link_state_table = Hash.new
     @link_state_table[@source_name] = 0
 
-    # TODO - Parse config file and set fields for
+    # Parse config file and set fields for
     # link state instance
-    @link_state_packet.sourceName = @source_name
-    @link_state_packet.sourceIP = @source_ip
-    @link_state_packet.seqNumb = 0
+    @link_state_packet = LinkStatePacket.new(sourceName, source_ip, 0)
     parse_config(config_file)
 
-
+    # Construct initial graph based on 
+    # the neighbors specified in the 
+    # configuration file 
+    
     
   end
 
@@ -59,13 +61,14 @@ class FloodingUtil
     # Check first if the given link state
     # packets source node is in the table
     if @link_state_table[ls_packet.source_name] == nil
-
+      @link_state_table[ls_packet.source_name] = ls_packet.seqNumb
+      # Build graph
     
     # If link state is already in the table check its seq numb
     # against the recieved link state packet if it did change 
     # we want to update the table and flood
     elsif @link_state_table[ls_packet.source_name] != ls_packet.seq_numb 
-
+      # Update lsp and topology ls table and flood
     
     # If the recieved link state packet is in the table and
     # has the previously recorded sequence number we want
@@ -89,17 +92,24 @@ class FloodingUtil
       # Check if the first node is listed in the line
       # is the current node being run on
       if nodes.first == @source_name
+        # Check and see if neighbor is already in the hash
+        if @link_state_packet.neighbors.has_key([nodes[2], nodes[3]])? == false
+          @link_state_packet.neighbors[[nodes[2], nodes[3]]] = nodes[4]
+        end 
        
-
       # Check if the third node listed in line is the
       # node being run on
-      elsif nodes[3] == @source_name
+      elsif nodes[2] == @source_name
+        # Check and see if neighbor is already in the hash 
+        if @link_state_packet.neighbors.has_key([nodes.first, nodes[1]])? == false
+          @link_state_packet.neighbors[[nodes.first, nodes[1]]] = nodes[4]
+        end 
 
+      # Curent node has no neighbors  
       else 
-        # Current node has no neighbors
+        # Neighbors should be nil or empty 
       end
     end 
-
     
   end
 
