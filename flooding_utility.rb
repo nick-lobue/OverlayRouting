@@ -1,21 +1,23 @@
 require 'socket'
 require 'link_state_packet'
+require 'graph_builder'
 
 class FloodingUtil
   
-  attr_accessor :source_name, :source_ip, :link_state_packet, :link_state_table
+  attr_accessor :source_name, :source_ip, :link_state_packet, :link_state_table, :global_top, :port
 
   # ------------------------------------------------
   # Initialize the flooding util with the info
   # needed for the link state packet
   # ------------------------------------------------
-  def initialize(source_name, source_ip, config_file)
+  def initialize(source_name, source_ip, port_name, config_file)
     
     # Set source name field which marks
     # instance of node the flooding util 
     # is running on
     @source_name = source_name
     @source_ip = source_ip
+    @port = port_name
     
 
     # Initialize link state table and insert
@@ -23,31 +25,39 @@ class FloodingUtil
     @link_state_table = Hash.new
     @link_state_table[@source_name] = 0
 
+    # Construct initial graph 
+    @global_top = GraphBuilder.new
+    init_node = GraphNode.new(@source_name, @source_ip)
+    @global_top.addNode(init_node)
+
     # Parse config file and set fields for
     # link state instance
     @link_state_packet = LinkStatePacket.new(sourceName, source_ip, 0)
     parse_config(config_file)
 
-    # Construct initial graph based on 
-    # the neighbors specified in the 
-    # configuration file 
-    
-    
+    # Add new neighbors to the global 
+    # topology graph
+    @link_state_packet.neighbors.keys.each do |(host, ip)|
+    	neighbor = GraphNode.new(@host, @ip)
+    	cost = @link_state_packet[[host, ip]]
+    	@global_top.addNode(neighbor)
+    	@global_top.addEdge(init_node, neighbor, cost)
+    end
   end
 
   # ------------------------------------------------
   # This utility method will be used to send the
   # current link state packet to its neighbors 
   # ------------------------------------------------
-  def flood_neighbors
+  def flood_neighbors(ls_packet)
 
-    # TODO - Use tcp sockets to send out the link
+    # Use tcp sockets to send out the link
     # state packet to all of its neighbors
-    @link_state_packet.neighbors.each do |neighbor|
+    ls_packet.neighbors.keys.each do |neighbor|
         # Send packet 
-    end
-
-      
+        socket = TCPSocket.open(neighbor.source_ip, @port)
+        socket.print(ls_packet)
+    end      
   end
 
   # -----------------------------------------------
@@ -63,7 +73,8 @@ class FloodingUtil
     if @link_state_table[ls_packet.source_name] == nil
       @link_state_table[ls_packet.source_name] = ls_packet.seqNumb
       # Build graph
-    
+
+	    
     # If link state is already in the table check its seq numb
     # against the recieved link state packet if it did change 
     # we want to update the table and flood
@@ -76,7 +87,6 @@ class FloodingUtil
     else        
        # Do nothing aka drop the packet
     end
-
   end
 
   # ---------------------------------------------
@@ -110,7 +120,6 @@ class FloodingUtil
         # Neighbors should be nil or empty 
       end
     end 
-    
   end
 
   # --------------------------------------------
@@ -128,7 +137,5 @@ class FloodingUtil
     # this method will return true in this case and
     # false otherwise
     return true
-
   end   
-
 end
