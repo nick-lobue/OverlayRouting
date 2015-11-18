@@ -41,11 +41,11 @@ end
 #set of final shortest-path weights
 class DijkstraExecutor
 
-
 	#runs dijkstra on Graph. Based on CLRS pseudocode
 	#Warning do not run on an already computed graph
-	def dijkstra(graph, source)
-		
+	def self.routing_table(graph, source)
+		routing_table = Hash.new
+
 		if source.class == "String"
 			#get GraphNode by hostname
 			source = graph.getNode(source)
@@ -67,9 +67,32 @@ class DijkstraExecutor
 
 			s.push(u)
 
+			#Since u is in S. The shortest path to u is found
+			unless u.equal? source
+				if u.parent.equal? source
+					#directly connected to source and the directly going from 
+					#source to u is the shortest path
+					routing_table[u.hostName] = u.hostName
+					u.forward_node = u
+					u.is_forward_node = true
+				else
+					#Assumption parent should already be in s since the 
+					#shortest path should include s.parent that is source -> u.parent -> u
+					#TODO verify if this is true
+					#
+					routing_table[u.hostName] = u.hostName
+					u.forward_node = u.parent.forward_node
+
+					unless s.includes?(v.parent)
+						#Made an incorrect assumption
+						throw :parentNotInPath
+					end
+				end
+			end
+
 			u.neighbors.each{ |v|
 				#relax u to v if possible
-				#
+
 			}
 
 		end
@@ -90,7 +113,7 @@ class DijkstraExecutor
 	#If recomputing dijkstra on a graph that has already been computed on
 	#This will need to run to clear any values used in computation
 	#Note: I don't think we ever need to recompute this 
-	def clear_dijkstra(graph)
+	def self.clear_dijkstra(graph)
 	end
 
 end
