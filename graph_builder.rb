@@ -168,9 +168,15 @@ class GraphBuilder
 	# @return self for method chaining
 	# --------------------------------------------------
 	def deleteNode(hostName)
+		#TODO Nick: What about edges? Is that handled somewhere else?
 		@graph.delete(hostName)
 
 		return self
+	end
+
+
+	def weight(source, destination)
+		#TODO this would be faster if I could get GraphNode.neighbors by destination.hostname
 	end
 
 	# -------------------------------------------------

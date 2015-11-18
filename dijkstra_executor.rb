@@ -79,7 +79,7 @@ class DijkstraExecutor
 					#Assumption parent should already be in s since the 
 					#shortest path should include s.parent that is source -> u.parent -> u
 					#TODO verify if this is true
-					#
+					
 					routing_table[u.hostName] = u.hostName
 					u.forward_node = u.parent.forward_node
 
@@ -90,8 +90,15 @@ class DijkstraExecutor
 				end
 			end
 
+			#relax all neighbors
 			u.neighbors.each{ |v|
-				#relax u to v if possible
+				
+				relax_distance = u.distance + graph.weight(s, d)
+				
+				if v.distance.nil? or v.distance > relax_distance
+					v.distance = relax_distance
+					v.parent = u
+				end
 
 			}
 
