@@ -1,6 +1,11 @@
 require 'socket'
+#run on n2
+ip = "10.0.0.20"
 
-ip = "10.0.0.21"
-s = TCPSocket.new ip, 2000
+s = TCPSocket.new ip, 5000
 
-s.gets
+while line = s.gets # Read lines from socket
+  puts line         # and print them
+end
+
+s.close             # close socket when done
