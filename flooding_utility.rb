@@ -143,16 +143,60 @@ class FloodingUtil
   # Determines if the local topology has changed
   # --------------------------------------------
   def has_changed(config_file)
+  	# Temporary hash used to hold neighbors
+  	# of current node parsed out from file
+  	temp_neighbors = Hash.new
+
     # Parse the config file and look for the
     # information for the current node instance
-    
-    # Check the parsed information agaisnt the
-    # current link state packet instance
-    # if the neighbors have changed we want to
-    # update the instance with the new neighbors, 
-    # its seq number, and its seq numb in the table
-    # this method will return true in this case and
-    # false otherwise
-    return true
+    File.open(config_file, "r").readlines.each.do |line|
+    	nodes = line.split(',')
+
+    	# Look for current node in the first index of the line
+    	if nodes.first == @source_name
+    		temp_neighbors[[nodes[2], nodes[3]]] = nodes[4]
+
+    	# Look for current node in the last index of the line
+    	elsif nodes[2] == @source_name
+    		temp_neighbors[[nodes.first, nodes[2]]] = nodes[4]
+
+    	# Node not in current line	
+    	else
+    		# Do nothing
+    	end
+	end
+
+	# Compare temp_neighbors parsed out to 
+	# neighbors in current link state packet
+	if  @link_state_packet.neighbors.keys.count == temp_neighbors.keys.count
+
+		@link_state_packet.neighbors.keys.each do |(host, ip)|
+			# Continue through loop if the neighbors in the 
+			# temp_neighbor match up with the neighbors in the
+			# current link state packet
+			next if temp_neighbors.has_key?([host, ip]) && @link_state_packet.neighbors[[host, ip]] == temp_neighbors[[host, ip]]
+
+			# Increase sequence number of link state packet
+			@link_state_packet.seqNumb += 1
+
+			# Update sequence number in link state table
+			@link_state_table[@source_name] += 1
+
+			# Update neighbors in link state packet
+			@link_state_packet.neighbors = temp_neighbors
+
+			# Update global top
+
+			# Flood network with updated packet
+			flood_neighbors(@link_state_packet)
+
+			return true
+		end
+
+		# If loop finishes without returning true the 
+		# topology has not changed
+		return false 
+    end
   end   
 end
+
