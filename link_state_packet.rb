@@ -1,3 +1,5 @@
+require 'json'
+
 class LinkStatePacket
 	attr_accessor :source_name, :source_ip, :seq_numb, :neighbors
 
@@ -24,21 +26,23 @@ class LinkStatePacket
 		@neighbors = neighbors
 	end
 
-	# --------------------------------------
-	# Override toString function to make for 
-	# easy parsing of objects
-	# --------------------------------------
-	def to_string
-		return "#{@source_name},#{@source_ip},#{@seqNumb.to_s},#{@neighbors.inspect}"
+	# -------------------------------------
+	# Override the to json method to set up 
+	# object for parsing
+	# -------------------------------------
+	def to_json
+		{'source_name' => @source_name, 'source_ip' => @source_ip, 'seq_numb' => 
+			@seq_numb, 'neighbors' => @neighbors}.to_json
 	end
 
-	# --------------------------------------
+	# -------------------------------------
 	# A static method that will be used to 
-	# convert a link state packet string 
-	# back into a link state object
-	# --------------------------------------
-	def self.from_string(input)
-		link_fields = input.split(',')
-		return LinkStatePacket.new(link_fields[0], link_fields[1], link_fields[2].to_i, eval(link_fields[3]))
+	# convert a link state packet json back
+	# into a link state object
+	# -------------------------------------
+	def self.from_json(input)
+		data = JSON.parse(input)
+		return LinkStatePacket.new(data['source_name'], data['source_ip'], 
+			data['seq_numb'].to_i, data['neighbors'])
 	end
 end

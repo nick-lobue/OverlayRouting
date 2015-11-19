@@ -59,7 +59,7 @@ class FloodingUtil
     ls_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
         # Send packet 
         socket = TCPSocket.open(neighbor_ip, @port)
-        socket.print(ls_packet.to_string)
+        socket.print(ls_packet.to_json)
     end      
   end
 
