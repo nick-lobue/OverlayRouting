@@ -158,7 +158,7 @@ class FloodingUtil
 
     	# Look for current node in the last index of the line
     	elsif nodes[2] == @source_name
-    		temp_neighbors[[nodes.first, nodes[2]]] = nodes[4]
+    		temp_neighbors[[nodes.first, nodes[1]]] = nodes[4]
 
     	# Node not in current line	
     	else
@@ -176,19 +176,9 @@ class FloodingUtil
 			# current link state packet
 			next if temp_neighbors.has_key?([host, ip]) && @link_state_packet.neighbors[[host, ip]] == temp_neighbors[[host, ip]]
 
-			# Increase sequence number of link state packet
-			@link_state_packet.seqNumb += 1
-
-			# Update sequence number in link state table
-			@link_state_table[@source_name] += 1
-
-			# Update neighbors in link state packet
-			@link_state_packet.neighbors = temp_neighbors
-
-			# Update global top
-
-			# Flood network with updated packet
-			flood_neighbors(@link_state_packet)
+			# Temp neighbors does not match link state
+			# packet needs to be updated
+			update_packet(temp_neighbors)
 
 			return true
 		end
@@ -197,6 +187,36 @@ class FloodingUtil
 		# topology has not changed
 		return false 
     end
+
+    # Does not match current link state packet
+    # needs to be updated
+    update_packet(temp_neighbors)
+
+    return true
+  end
+
+  # ----------------------------------------
+  # This is a helper method used to update 
+  # the current link state packet with new
+  # params and flood it to the network
+  # ----------------------------------------
+  def update_packet(new_neighbors)
+
+  	# Increase sequence number of link state packet
+	@link_state_packet.seqNumb += 1
+
+	# Update sequence number in link state table
+	@link_state_table[@source_name] += 1
+
+	# Update neighbors in link state packet
+	@link_state_packet.neighbors = new_neighbors
+
+	# Update global top
+
+	# Flood network with updated packet
+	flood_neighbors(@link_state_packet)
+
   end   
 end
+
 
