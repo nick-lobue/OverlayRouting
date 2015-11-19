@@ -1,5 +1,5 @@
 require 'socket'
-#run on n2
+#run on n2 in CORE
 ip = "10.0.0.20"
 
 s = TCPSocket.new ip, 5000

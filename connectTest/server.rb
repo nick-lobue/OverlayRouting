@@ -1,5 +1,5 @@
 require 'socket'
-#run on n1
+#run on n1 in CORE
 server = TCPServer.new 5000 # Server bound to port 2000
 
 loop do
