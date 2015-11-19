@@ -43,6 +43,9 @@ class FloodingUtil
     	@global_top.addNode(neighbor)
     	@global_top.addEdge(init_node, neighbor, cost)
     end
+
+    # Flood network
+    flood_neighbors(@link_state_packet)
   end
 
   # ------------------------------------------------
