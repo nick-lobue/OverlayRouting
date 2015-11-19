@@ -37,6 +37,19 @@ class MinHeap
 	end
 end
 
+#ip and hostname of a Routing Node
+RouteNode = struct.new(:ip, :hostname)
+
+class RoutingInfo
+	:attr_accessor :source, :destination, :next_hop, :distance
+
+	def initialize(source, destination, next_hop, distance)
+		@source = source
+		@destination = destination
+		@next_hop = next_hop
+		@distance = distance
+	end
+end
 
 #set of final shortest-path weights
 class DijkstraExecutor
@@ -104,6 +117,7 @@ class DijkstraExecutor
 
 		end
 
+		clear_dijkstra graph
 
 		#Ending state:
 		#Each node has a parent pointer that eventually leads back to s
@@ -117,9 +131,7 @@ class DijkstraExecutor
 		#Since u in dijkstra cannot be relaxed any furthur maybe I could set 
 	end
 
-	#If recomputing dijkstra on a graph that has already been computed on
-	#This will need to run to clear any values used in computation
-	#Note: I don't think we ever need to recompute this 
+	#TODO
 	def self.clear_dijkstra(graph)
 	end
 
