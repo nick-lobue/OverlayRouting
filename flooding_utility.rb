@@ -32,14 +32,14 @@ class FloodingUtil
 
     # Parse config file and set fields for
     # link state instance
-    @link_state_packet = LinkStatePacket.new(sourceName, source_ip, 0)
+    @link_state_packet = LinkStatePacket.new(source_name, source_ip, 0)
     parse_config(config_file)
 
     # Add new neighbors to the global 
     # topology graph
     @link_state_packet.neighbors.keys.each do |(host, ip)|
-    	neighbor = GraphNode.new(@host, @ip)
-    	cost = @link_state_packet[[host, ip]]
+    	neighbor = GraphNode.new(host, ip)
+    	cost = @link_state_packet.neighbors[[host, ip]]
     	@global_top.addNode(neighbor)
     	@global_top.addEdge(init_node, neighbor, cost)
     end
@@ -56,9 +56,9 @@ class FloodingUtil
 
     # Use tcp sockets to send out the link
     # state packet to all of its neighbors
-    ls_packet.neighbors.keys.each do |neighbor|
+    ls_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
         # Send packet 
-        socket = TCPSocket.open(neighbor.source_ip, @port)
+        socket = TCPSocket.open(neighbor_ip, @port)
         socket.print(ls_packet.to_string)
     end      
   end
@@ -74,11 +74,11 @@ class FloodingUtil
     # Check first if the given link state
     # packets source node is in the table
     if @link_state_table[ls_packet.source_name] == nil
-      @link_state_table[ls_packet.source_name] = ls_packet.seqNumb
+      @link_state_table[ls_packet.source_name] = ls_packet.seq_numb
       # Build graph
       ls_packet.neighbors.keys.each do |(host, ip)| 
         neighbor = GraphNode.new(@host, @ip)
-        cost = ls_packet[[host, ip]]
+        cost = ls_packet.neighbors[[host, ip]]
         @global_top.addNode(neighbor)
         @global_top.addEdge(init_node, neighbor, cost)
       end
@@ -203,7 +203,7 @@ class FloodingUtil
   def update_packet(new_neighbors)
 
   	# Increase sequence number of link state packet
-	@link_state_packet.seqNumb += 1
+	@link_state_packet.seq_numb += 1
 
 	# Update sequence number in link state table
 	@link_state_table[@source_name] += 1

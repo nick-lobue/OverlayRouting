@@ -1,5 +1,5 @@
 class LinkStatePacket
-	attr_accessor :sourceName, :sourceIP, :seqNumb, :neighbors
+	attr_accessor :source_name, :source_ip, :seq_numb, :neighbors
 
 	# ---------------------------------------
 	# Initialize the fields of the link state
@@ -7,9 +7,9 @@ class LinkStatePacket
 	# the neighbors of the node
 	# ---------------------------------------
 	def initialize(source_name, source_ip, seq_numb)
-		@sourceName = source_name
-		@sourceIP = source_ip
-		@seqNumb = seqNumb
+		@source_name = source_name
+		@source_ip = source_ip
+		@seq_numb = seq_numb
 		@neighbors = Hash.new
 	end
 
@@ -18,9 +18,9 @@ class LinkStatePacket
 	# packet including a hash of neighbors
 	# --------------------------------------
 	def initialize(source_name, source_ip, seq_numb, neighbors)
-		@sourceName = source_name
-		@sourceIP = source_ip
-		@seqNumb = seqNumb
+		@source_name = source_name
+		@source_ip = source_ip
+		@seq_numb = seq_numb
 		@neighbors = neighbors
 	end
 
