@@ -130,60 +130,60 @@ class DijkstraExecutor
     routing_table[source_routing_node.hostname] = source_routing_entry
 
 		#Finished set TODO consider deletion
-		s = Set.new
+		completed = Set.new
 
-		q = MinHeap.new(graph.graph.values)
+		not_processed = MinHeap.new(graph.graph.values)
 
-    $log.debug q.inspect
+    $log.debug not_processed.inspect
 
-		until q.empty?
-			u = q.extract_min
+		until not_processed.empty?
+			curr_node = not_processed.extract_min
 
-			s.add(u)
+			completed.add(curr_node)
 
-      $log.debug "Extracted: #{u.host_name}"
+      $log.debug "Extracted: #{curr_node.host_name}"
 
-			#Since u is in S. The shortest path to u is found
-			unless u.equal? source
-				if u.parent.equal? source
+			#Since curr_node is in completed. The shortest path to curr_node is already found
+			unless curr_node.equal? source
+				if curr_node.parent.equal? source
 					#directly connected to source and the directly going from 
-					#source to u is the shortest path
-					u.next_hop = u
-					u.is_forward_node = true
+					#source to curr_node is the shortest path
+					curr_node.next_hop = curr_node
+					curr_node.is_forward_node = true
 
 				else
-					#Parent should already be in s since the 
-					#shortest path should include s.parent that is source -> u.parent -> u
-					u.next_hop = u.parent.next_hop
+					#Parent should already be in completed since the
+					#shortest path should include curr_node.parent that is source -> curr_node.parent -> curr_node
+					curr_node.next_hop = curr_node.parent.next_hop
 
 				end
 
-				#contruct routing entry where destination is u and next hop is u.next_hop
-				destination_route_node = RouteNode.new u.ip_address, u.host_name
-				next_hop_route_node = RouteNode.new u.next_hop.ip_address, u.next_hop.host_name
-				routing_entry = RouteEntry.new destination_route_node, next_hop_route_node, u.distance
+				#contruct routing entry where destination is curr_node and next hop is curr_node.next_hop
+				destination_route_node = RouteNode.new curr_node.ip_address, curr_node.host_name
+				next_hop_route_node = RouteNode.new curr_node.next_hop.ip_address, curr_node.next_hop.host_name
+				routing_entry = RouteEntry.new destination_route_node, next_hop_route_node, curr_node.distance
 
-				routing_table[u.host_name] = routing_entry
+				routing_table[curr_node.host_name] = routing_entry
 
 			end
 
 			#relax all neighbors
-			#TODO once neighbors becomes a hash use neighbors.values.each instead
-			u.neighbors.each{ |edge|
-				v = edge.end_node
-				relax_distance = u.distance + graph.weight(u, v)
+
+			curr_node.neighbors.values.each{ |edge|
+        neighbor = edge.end_node
+				relax_distance = curr_node.distance + graph.weight(curr_node, neighbor)
 				
 				#relax is relax distance is less than v.distance or if v.distance DNE
-				if v.distance.nil? or v.distance > relax_distance
+				if neighbor.distance.nil? or neighbor.distance > relax_distance
 
-          if(s.include? v)
+          if(completed.include? neighbor)
             #A node is not supposed to be updated if it is in completed
             throw :updating_node_in_completed
           end
 
-          $log.debug "Updating v: #{v.host_name} old distance #{v.distance} relaxed to #{relax_distance}"
-					v.distance = relax_distance
-					v.parent = u
+          $log.debug "Updating v: #{neighbor.host_name} old distance #{neighbor.distance} relaxed to #{relax_distance}"
+					neighbor.distance = relax_distance
+					neighbor.parent = curr_node
 				end
 
 			}
@@ -196,13 +196,6 @@ class DijkstraExecutor
 		#a distance that gets the total weight from s
 
     return routing_table
-
-		#TODO itterate from each node back to s. if ittNode.parent == s 
-		#then set RoutingTable[node.hostname] => ittNode.hostname
-		#Performance Problem with that solution.  Linear network of 5 nodes requires
-		#4 + 3 + 2 + 1 itterations 
-		#Can I form the tree while doing dijkstra?
-		#Since u in dijkstra cannot be relaxed any furthur maybe I could set 
 	end
 
 	#TODO clear distances, weights, 
