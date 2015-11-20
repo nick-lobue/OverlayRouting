@@ -1,5 +1,5 @@
-require_relative 'graph_builder.rb'
-require_relative 'dijkstra_executor.rb'
+require_relative '../graph_builder.rb'
+require_relative '../dijkstra_executor.rb'
 
 
 
