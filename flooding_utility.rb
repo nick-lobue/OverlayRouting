@@ -93,8 +93,18 @@ class FloodingUtil
       # Update link state table
       @link_state_table[ls_packet.source_name] = ls_packet.seq_numb
 
-      # TODO - Update global topology graph 
-      deadNode = @global_top.getNode(ls_packet.source_name)
+      #Update global topology graph 
+      dead_top = Hash.new
+	  @link_state_packet.neighbors.keys.each do |(host, ip)|
+		dead_top[[host, ip]] = @link_state_packet.neighbors[[host, ip]]
+	  end
+
+	  new_top = Hash.new
+	  ls_packet.neighbors.keys.each do |(host, ip)|
+		new_top[[host, ip]] = ls_packet.neighbors[[host, ip]]
+	  end
+
+	  @global_top.replace_sub_topology(ls_packet.source_name, ls_packet.source_ip, dead_top, new_top)
       
 
       # Flood network with packe
@@ -210,10 +220,16 @@ class FloodingUtil
 	# Update sequence number in link state table
 	@link_state_table[@source_name] += 1
 
+	# Update global top
+	dead_top = Hash.new
+	@link_state_packet.neighbors.keys.each do |(host, ip)|
+		dead_top[[host, ip]] = @link_state_packet.neighbors[[host, ip]]
+	end
+
+	@global_top.replace_sub_topology(@source_name, @source_ip, dead_top, new_neighbors)
+
 	# Update neighbors in link state packet
 	@link_state_packet.neighbors = new_neighbors
-
-	# Update global top
 
 	# Flood network with updated packet
 	flood_neighbors(@link_state_packet)
