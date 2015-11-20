@@ -112,10 +112,7 @@ class DijkstraExecutor
 		if source.class == "String"
 			#get GraphNode by hostname
 			source = graph.getNode(source)
-		elif source.class != "GraphNode"
-			#source param must be of type GraphNode or String
-			throw :invalidArgument
-		end
+    end
 
     #clear from previous runs
 		clear_dijkstra graph
