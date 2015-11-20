@@ -60,7 +60,9 @@ class FloodingUtil
         # Send packet 
         socket = TCPSocket.open(neighbor_ip, @port)
         socket.print(ls_packet.to_json)
-    end      
+    end
+    # Close socket in use
+    socket.close
   end
 
   # -----------------------------------------------
