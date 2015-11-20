@@ -200,6 +200,12 @@ class DijkstraExecutor
 
 	#TODO clear distances, weights, 
 	def self.clear_dijkstra(graph)
+    graph.graph.values.each{ |node|
+      node.distance = nil
+      node.parent = nil
+      node.next_hop = nil
+      node.is_forward_node = nil
+    }
   end
 
 
