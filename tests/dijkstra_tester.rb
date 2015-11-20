@@ -73,8 +73,3 @@ puts n3_entry.destination.hostname == "n3"
 puts n3_entry.destination.ip == "10.0.0.3"
 puts n3_entry,next_hop.hostname == "n2"
 puts n3_entry.next_hop.ip == "10.0.0.2"
-
-
-
-#TODO test empty graph
-#DijkstraExecutor.routing_table Graph.new
