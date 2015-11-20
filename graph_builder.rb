@@ -107,18 +107,20 @@ class GraphBuilder
 
 		# add new edge to starting node
 		if @graph[start_node.host_name] == nil
-			start_node.neighbors = Set.new([new_edge_1])
+			start_node.neighbors = Hash.new
+			start_node.neighbors[new_edge_1.end_node.host_name] = new_edge_1
 			@graph[start_node.host_name] = start_node
 		else
-			@graph[start_node.host_name].neighbors.delete(new_edge_1).add(new_edge_1)
+			@graph[start_node.host_name].neighbors[new_edge_1.end_node.host_name] = new_edge_1
 		end
 
 		# add new edge to end node
 		if @graph[end_node.host_name] == nil
-			end_node.neighbors = Set.new([new_edge_2])
+			end_node.neighbors = Hash.new
+			end_node.neighbors[new_edge_2.end_node.host_name] = new_edge_2
 			@graph[end_node.host_name] = end_node
 		else
-			@graph[end_node.host_name].neighbors.delete(new_edge_2).add(new_edge_2)
+			@graph[end_node.host_name].neighbors[new_edge_2.end_node.host_name] = new_edge_2
 		end
 
 		return self
@@ -135,8 +137,8 @@ class GraphBuilder
 	# -----------------------------------------------------------------
 	def remove_edge(start_node, end_node)
 		if @graph[start_node.host_name] != nil && @graph[end_node.host_name] != nil
-			@graph[start_node.host_name].neighbors.delete(GraphEdge.new(end_node))
-			@graph[end_node.host_name].neighbors.delete(GraphEdge.new(start_node))
+			@graph[start_node.host_name].neighbors.delete(end_node.host_name)
+			@graph[end_node.host_name].neighbors.delete(start_node.host_name)
 		end
 
 		return self
@@ -155,7 +157,7 @@ class GraphBuilder
 
 			# add edges to neighbors
 			if new_node.neighbors != nil
-				new_node.neighbors.each { |edge|
+				new_node.neighbors.values.each { |edge|
 					if @graph[edge.end_node.host_name] != nil
 						self.addEdge(new_node, @graph[edge.end_node.host_name], edge.edge_cost)
 					else
@@ -176,7 +178,7 @@ class GraphBuilder
 	# --------------------------------------------------
 	def delete_node(host_name)
 		if @graph[host_name] != nil
-			@graph[host_name].neighbors.each { |edge|
+			@graph[host_name].neighbors.values.each { |edge|
 				@graph[edge.end_node.host_name].neighbors.delete(GraphEdge.new(@graph[host_name]))
 			}
 		end
