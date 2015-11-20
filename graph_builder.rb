@@ -16,6 +16,7 @@ class GraphBuilder
 	# if and how many times a graph has been updated.
 	# ---------------------------------------------------
 	def initialize()
+		#GraphNode.hostname => GraphNode
 		@graph = Hash.new
 		@sequence_number = 0
 	end
@@ -37,6 +38,21 @@ class GraphBuilder
 			@host_name = host_name
 			@ip_address = ip_address
 			@neighbors = neighbors
+
+			#used for dijkstras
+			@distance = nil
+			@parent = nil
+
+			#If it is directly connected to s then s can forward to this node directly
+			#Note: Even if this is true it might be possible that s doesn't route to this ever
+			@is_forward_node = false
+
+			#The GraphNode from which a source node will have to forward to 
+			#if it wants to reach this node
+			#e.g. network: S -> A -> D if S is the source then GraphNode D
+			#will have A as it's forward node.
+			#Used to construct routing table.
+			@next_hop = nil
 		end
 
 		# -----------------------------------------
@@ -49,7 +65,7 @@ class GraphBuilder
 
 		
 		# setters/getters
-		attr_accessor :host_name, :ip_address, :neighbors
+		attr_accessor :host_name, :ip_address, :neighbors, :distance, :parent, :is_forward_node, :next_hop
 
 	end
 
@@ -188,6 +204,8 @@ class GraphBuilder
 
 		return self
 	end
+
+
 
 	# -------------------------------------------------
 	# Returns the GraphNode object associated
