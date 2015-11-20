@@ -8,22 +8,20 @@ class LinkStatePacket
 	# packet and create a new hash to store 
 	# the neighbors of the node
 	# ---------------------------------------
-	def initialize(source_name, source_ip, seq_numb)
-		@source_name = source_name
-		@source_ip = source_ip
-		@seq_numb = seq_numb
-		@neighbors = Hash.new
-	end
-
-	# --------------------------------------
-	# Initilize all fields of link state
-	# packet including a hash of neighbors
-	# --------------------------------------
 	def initialize(source_name, source_ip, seq_numb, neighbors)
 		@source_name = source_name
 		@source_ip = source_ip
 		@seq_numb = seq_numb
-		@neighbors = neighbors
+		@neighbors = Hash.new
+
+		# If the neighbors parameter is nil then 
+		# initialize the link state packet to have
+		# an empty hash
+		if neighbors == nil
+			@neighbors = Hash.new
+		else
+			@neighbors = neighbors
+		end
 	end
 
 	# -------------------------------------

@@ -32,7 +32,7 @@ class FloodingUtil
 
     # Parse config file and set fields for
     # link state instance
-    @link_state_packet = LinkStatePacket.new(source_name, source_ip, 0)
+    @link_state_packet = LinkStatePacket.new(@source_name, @source_ip, 0, nil)
     parse_config(config_file)
 
     # Add new neighbors to the global 
@@ -60,9 +60,10 @@ class FloodingUtil
         # Send packet 
         socket = TCPSocket.open(neighbor_ip, @port)
         socket.print(ls_packet.to_json)
+		
+		# Close socket in use
+    	socket.close    
     end
-    # Close socket in use
-    socket.close
   end
 
   # -----------------------------------------------
@@ -121,7 +122,7 @@ class FloodingUtil
       # is the current node being run on
       if nodes.first == @source_name
         # Check and see if neighbor is already in the hash
-        if @link_state_packet.neighbors.has_key([nodes[2], nodes[3]])? == false
+        if @link_state_packet.neighbors.has_key?([nodes[2], nodes[3]]) == false
           @link_state_packet.neighbors[[nodes[2], nodes[3]]] = nodes[4]
         end 
        
@@ -129,7 +130,7 @@ class FloodingUtil
       # node being run on
       elsif nodes[2] == @source_name
         # Check and see if neighbor is already in the hash 
-        if @link_state_packet.neighbors.has_key([nodes.first, nodes[1]])? == false
+        if @link_state_packet.neighbors.has_key?([nodes.first, nodes[1]]) == false
           @link_state_packet.neighbors[[nodes.first, nodes[1]]] = nodes[4]
         end 
 
