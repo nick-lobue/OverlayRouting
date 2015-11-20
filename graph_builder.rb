@@ -206,10 +206,6 @@ class GraphBuilder
 	end
 
 
-	def weight(source, destination)
-		#TODO this would be faster if I could get GraphNode.neighbors by destination.hostname
-		1 #TODO use this as a temp value
-	end
 
 	# -------------------------------------------------
 	# Returns the GraphNode object associated

@@ -102,6 +102,8 @@ end
 #set of final shortest-path weights
 class DijkstraExecutor
 
+
+
 	#runs dijkstra on Graph. Based on CLRS pseudocode
 	#Warning do not run on an already computed graph
 	def self.routing_table(graph, source)
@@ -115,7 +117,7 @@ class DijkstraExecutor
 			throw :invalidArgument
 		end
 
-
+    #clear from previous runs
 		clear_dijkstra graph
 
 		#Source distance is 0 since we are starting from here
@@ -167,14 +169,20 @@ class DijkstraExecutor
 
 			end
 
-			#relax all neighbors
+			#relax all curr_node's neighbors
+      self.relax_neighbors(curr_node, completed)
 
-			curr_node.neighbors.values.each{ |edge|
+
+		end
+
+
+    def self.relax_neighbors(curr_node, completed)
+      curr_node.neighbors.values.each{ |edge|
         neighbor = edge.end_node
-				relax_distance = curr_node.distance + graph.weight(curr_node, neighbor)
-				
-				#relax is relax distance is less than v.distance or if v.distance DNE
-				if neighbor.distance.nil? or neighbor.distance > relax_distance
+        relax_distance = curr_node.distance + self.weight(curr_node, neighbor)
+
+        #relax is relax distance is less than v.distance or if v.distance DNE
+        if neighbor.distance.nil? or neighbor.distance > relax_distance
 
           if(completed.include? neighbor)
             #A node is not supposed to be updated if it is in completed
@@ -182,23 +190,26 @@ class DijkstraExecutor
           end
 
           $log.debug "Updating v: #{neighbor.host_name} old distance #{neighbor.distance} relaxed to #{relax_distance}"
-					neighbor.distance = relax_distance
-					neighbor.parent = curr_node
-				end
+          neighbor.distance = relax_distance
+          neighbor.parent = curr_node
+        end
 
-			}
-
-		end
-
+      }
+    end
 
 		#Ending state:
 		#Each node has a parent pointer that eventually leads back to s
 		#a distance that gets the total weight from s
 
     return routing_table
-	end
+  end
 
-	#TODO clear distances, weights, 
+
+  def self.weight(source, destination)
+    source.neighbors[destination.host_name].edge_cost
+  end
+
+	#Clearing distances, parents, next_hop, forward_nodes
 	def self.clear_dijkstra(graph)
     graph.graph.values.each{ |node|
       node.distance = nil
