@@ -201,21 +201,20 @@ class GraphBuilder
 	end
 
 	# ----------------------------------------------------------
-	# Replaces the old topology in the global topology
-	# graph by the new topology.
+	# Replaces the old local topology in the global topology
+	# graph by the new local topology.
 	# @param source_hostname Hostname of node that changed.
 	# @param source_ip Ip address of the node being changed.
 	# @param new_topology Newly updated local topology.
-	# @param old_topology Old version of the local topology.
 	# @return self for method chaining.
 	# ----------------------------------------------------------
-	def replace_sub_topology(source_hostname, source_ip, new_topology, old_topology)
+	def replace_sub_topology(source_hostname, source_ip, new_topology)
 		source_node = GraphNode.new(source_hostname, source_ip)
 
 		# removing all edges associated with the old topology
 		if @graph[source_hostname] != nil
-			old_topology.each { |(host_name, ip), cost|
-				self.remove_edge(source_node, GraphNode.new(host_name, ip))
+			@graph[source_hostname].neighbors.values.each { |edge|
+				self.remove_edge(source_node, edge.end_node)
 			}
 		end
 
