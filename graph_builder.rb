@@ -43,8 +43,8 @@ class GraphBuilder
 		# Override equals method to compare two
 		# nodes by hostname and ip address.
 		# -----------------------------------------
-		def eql?(otherNode)
-			return self.host_name == otherNode.host_name && self.ip_address == otherNode.ip_address
+		def eql?(other_node)
+			return self.host_name == other_node.host_name && self.ip_address == other_node.ip_address
 		end
 
 		
