@@ -44,9 +44,8 @@ class GraphBuilder
 			@distance = nil
 			@parent = nil
 
-			#If it is directly connected to s then s can forward to this node
-			#Even if this is true it might be possible that s doesn't route to this ever
-			#Might not need this field
+			#If it is directly connected to s then s can forward to this node directly
+			#Note: Even if this is true it might be possible that s doesn't route to this ever
 			@is_forward_node = false
 
 			#The GraphNode from which a source node will have to forward to 
@@ -54,7 +53,7 @@ class GraphBuilder
 			#e.g. network: S -> A -> D if S is the source then GraphNode D
 			#will have A as it's forward node.
 			#Used to construct routing table.
-			@forward_node = nil
+			@next_hop = nil
 		end
 
 		# -----------------------------------------
