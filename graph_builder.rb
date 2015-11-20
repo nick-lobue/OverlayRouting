@@ -159,9 +159,9 @@ class GraphBuilder
 			if new_node.neighbors != nil
 				new_node.neighbors.values.each { |edge|
 					if @graph[edge.end_node.host_name] != nil
-						self.addEdge(new_node, @graph[edge.end_node.host_name], edge.edge_cost)
+						self.add_edge(new_node, @graph[edge.end_node.host_name], edge.edge_cost)
 					else
-						self.addEdge(new_node, edge.end_node, edge.edge_cost)
+						self.add_edge(new_node, edge.end_node, edge.edge_cost)
 					end
 				}
 			end
