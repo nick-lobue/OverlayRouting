@@ -65,7 +65,7 @@ class GraphBuilder
 
 		
 		# setters/getters
-		attr_accessor :host_name, :ip_address, :neighbors
+		attr_accessor :host_name, :ip_address, :neighbors, :distance, :parent, :is_forward_node, :next_hop
 
 	end
 
