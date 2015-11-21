@@ -71,5 +71,51 @@ puts n3_entry.inspect #type RouteEntry
 puts n3_entry.distance == 2
 puts n3_entry.destination.hostname == "n3"
 puts n3_entry.destination.ip == "10.0.0.3"
-puts n3_entry,next_hop.hostname == "n2"
+puts n3_entry.next_hop.hostname == "n2"
 puts n3_entry.next_hop.ip == "10.0.0.2"
+
+n4 = GraphBuilder::GraphNode.new('n4', '10.0.0.4')
+n5 = GraphBuilder::GraphNode.new('n5', '10.0.0.5')
+n6 = GraphBuilder::GraphNode.new('n6', '10.0.0.6')
+n7 = GraphBuilder::GraphNode.new('n7', '10.0.0.7')
+
+graph.add_edge(n4, n5, 1)
+graph.add_edge(n5, n6, 1)
+graph.add_edge(n6, n7, 1)
+graph.add_edge(n7, n4, 1)
+
+puts "Disjoint networks"
+
+DijkstraExecutor.routing_table(graph, n1).print_routing
+# Disjoint network: n4 is not reachable from n1.
+# D, [2015-11-20T19:49:46.263444 #29449] DEBUG -- : Disjoint network: n5 is not reachable from n1.
+# D, [2015-11-20T19:49:46.263467 #29449] DEBUG -- : Disjoint network: n6 is not reachable from n1.
+# D, [2015-11-20T19:49:46.263547 #29449] DEBUG -- : Disjoint network: n7 is not reachable from n1.
+# Routing table for: n1
+# destination: n1 => next hop: n1 distance: 0
+# destination: n2 => next hop: n2 distance: 1
+# destination: n3 => next hop: n2 distance: 2
+
+DijkstraExecutor.routing_table(graph, n5).print_routing
+
+
+# graph.add_edge(n4, n6, 1) #faster to go from n4 to n6
+#
+# puts "cross from n4 to n6"
+# DijkstraExecutor.routing_table(graph, n4).print_routing
+#
+#
+# puts "bad cross from n4 to n6"
+# graph.remove_edge(n4, n6)
+# graph.add_edge(n4, n6, 10) #Faster to go through n5
+# DijkstraExecutor.routing_table(graph, n4).print_routing
+#
+#
+# graph.add_edge(n4, n6, 1)
+#
+# puts "cross from n5 to n7"
+# DijkstraExecutor.routing_table(graph, n5).print_routing
+#
+# puts "connect disjoint"
+# graph.add_edge(n1, n4, 5)
+

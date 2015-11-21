@@ -185,9 +185,9 @@ class FloodingUtil
 			return true
 		end
 
-		# If loop finishes without returning true the 
+		# If loop finishes without returning true the
 		# topology has not changed
-		return false 
+		return false
     end
 
     # Does not match current link state packet

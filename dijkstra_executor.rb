@@ -1,8 +1,11 @@
 require 'set'
 require 'logger'
-$log = Logger.new(STDOUT)
-$log.level = Logger::DEBUG
 
+if $log.nil?
+  #main_processor.rb did not call this. In this case create global logger
+  $log = Logger.new(STDOUT)
+  $log.level = Logger::DEBUG
+end
 
 class MinHeap
 	#Not really a min heap but using as a place holder until I need to
@@ -20,11 +23,14 @@ class MinHeap
     if min_node.nil?
       nil #no node exists
     end
-		min_distance = min_node.distance
+
+    min_distance = min_node.distance
 
 		@heap.each{|node|
       unless node.distance.nil?
-        if node.distance < min_distance
+        #if the current node's distance is less than min_distance than set as new min_node
+        #Note: if the current min_distance is nil then that is the equivalent of infinity
+        if min_distance.nil? or node.distance < min_distance
           #found new min node
           min_node = node
           min_distance = node.distance
@@ -89,11 +95,15 @@ class RoutingTable < Hash
 
 end
 
+
 class RouteEntry
 	attr_accessor :destination, :next_hop, :distance
 
+  # @param destination RouteNode
+  # @param next_hop RouteNode
+  # @param distance Integer
 	def initialize(destination, next_hop, distance)
-		@destination = destination
+		@destination = destination #RouteNode
 		@next_hop = next_hop
 		@distance = distance
 	end
@@ -102,8 +112,6 @@ end
 #set of final shortest-path weights
 class DijkstraExecutor
 
-
-
 	#runs dijkstra on Graph. Based on CLRS pseudocode
 	#Warning do not run on an already computed graph
 	def self.routing_table(graph, source)
@@ -111,7 +119,7 @@ class DijkstraExecutor
 		#parameter check
 		if source.class == "String"
 			#get GraphNode by hostname
-			source = graph.getNode(source)
+			source = graph.get_node(source)
     end
 
     #clear from previous runs
@@ -131,7 +139,11 @@ class DijkstraExecutor
 		#Finished set TODO consider deletion
 		completed = Set.new
 
+    #TODO maybe only pass in nodes that are reachable from source
 		not_processed = MinHeap.new(graph.graph.values)
+
+    #unreachable nodes
+    unreachable = Set.new
 
     $log.debug not_processed.inspect
 
@@ -153,6 +165,18 @@ class DijkstraExecutor
 				else
 					#Parent should already be in completed since the
 					#shortest path should include curr_node.parent that is source -> curr_node.parent -> curr_node
+
+          if curr_node.parent.nil?
+            #TODO talk to Nick and Tyler if I should not include unreachable nodes in routing table.
+            #if curr_node.parent is not reachable then
+            $log.debug "Disjoint network: #{curr_node.host_name} is not reachable from #{source.host_name}."
+
+            unreachable.add(curr_node)
+            completed.delete(curr_node)
+
+            next
+
+          end
 					curr_node.next_hop = curr_node.parent.next_hop
 
 				end
