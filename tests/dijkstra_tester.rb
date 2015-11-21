@@ -99,23 +99,27 @@ DijkstraExecutor.routing_table(graph, n1).print_routing
 DijkstraExecutor.routing_table(graph, n5).print_routing
 
 
-# graph.add_edge(n4, n6, 1) #faster to go from n4 to n6
-#
-# puts "cross from n4 to n6"
-# DijkstraExecutor.routing_table(graph, n4).print_routing
-#
-#
-# puts "bad cross from n4 to n6"
-# graph.remove_edge(n4, n6)
-# graph.add_edge(n4, n6, 10) #Faster to go through n5
-# DijkstraExecutor.routing_table(graph, n4).print_routing
-#
-#
-# graph.add_edge(n4, n6, 1)
-#
-# puts "cross from n5 to n7"
-# DijkstraExecutor.routing_table(graph, n5).print_routing
-#
-# puts "connect disjoint"
-# graph.add_edge(n1, n4, 5)
+graph.add_edge(n4, n6, 1) #faster to go from n4 to n6
+
+puts "cross from n4 to n6"
+DijkstraExecutor.routing_table(graph, n4).print_routing
+
+
+puts "bad cross from n4 to n6"
+graph.remove_edge(n4, n6)
+graph.add_edge(n4, n6, 10) #Faster to go through n5
+DijkstraExecutor.routing_table(graph, n4).print_routing
+
+
+graph.add_edge(n5, n7, 1)
+
+puts "cross from n5 to n7"
+DijkstraExecutor.routing_table(graph, n5).print_routing
+
+puts "connect disjoint"
+graph.add_edge(n2, n4, 5)
+DijkstraExecutor.routing_table(graph, n1).print_routing
+
+graph.add_edge(n7, n1, 5)
+DijkstraExecutor.routing_table(graph, n1).print_routing
 
