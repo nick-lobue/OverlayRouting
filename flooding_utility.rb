@@ -1,6 +1,6 @@
 require 'socket'
-require 'link_state_packet'
-require 'graph_builder'
+require_relative 'link_state_packet.rb'
+require_relative 'graph_builder.rb'
 
 class FloodingUtil
   
@@ -44,6 +44,7 @@ class FloodingUtil
     	@global_top.addEdge(init_node, neighbor, cost)
     end
 
+    @log.info(@link_state_packet.inspect)
     # Flood network
     flood_neighbors(@link_state_packet)
   end
@@ -114,8 +115,13 @@ class FloodingUtil
   # state packets
   # ---------------------------------------------
   def parse_config(config_file)
+    $log.info("About to read file")
+
     
-    File.open(config_file, "r").readlines.each.do |line|
+    File.open(config_file, "r").readlines.each do |line|
+
+      $log.info("go line #{line}")
+
       nodes = line.split(',')
 
       # Check if the first node is listed in the line
@@ -151,7 +157,7 @@ class FloodingUtil
 
     # Parse the config file and look for the
     # information for the current node instance
-    File.open(config_file, "r").readlines.each.do |line|
+    File.open(config_file, "r").readlines.each do |line|
     	nodes = line.split(',')
 
     	# Look for current node in the first index of the line

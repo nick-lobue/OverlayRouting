@@ -1,8 +1,9 @@
-require 'link_state_packet'
-require 'graph_builder'
-require 'flooding_utility'
-require 'dijkstra_executor'
 require 'logger'
+
+require_relative 'link_state_packet.rb'
+require_relative 'graph_builder.rb'
+require_relative 'flooding_utility.rb'
+require_relative 'dijkstra_executor.rb'
 
 $log = Logger.new(STDOUT)
 $log.level = Logger::DEBUG
