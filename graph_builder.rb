@@ -34,7 +34,7 @@ class GraphBuilder
 		# @param ip_address Specifies the node's ip.
 		# @param neighbors Provides the set of edges from this node.
 		# -------------------------------------------------------------
-		def initialize(host_name, ip_address, neighbors = nil)
+		def initialize(host_name, ip_address, neighbors = Hash.new)
 			@host_name = host_name
 			@ip_address = ip_address
 			@neighbors = neighbors
@@ -127,6 +127,8 @@ class GraphBuilder
 			start_node.neighbors[new_edge_1.end_node.host_name] = new_edge_1
 			@graph[start_node.host_name] = start_node
 		else
+			puts start_node.inspect
+			puts end_node.inspect
 			@graph[start_node.host_name].neighbors[new_edge_1.end_node.host_name] = new_edge_1
 		end
 

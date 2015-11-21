@@ -2,6 +2,9 @@ require 'socket'
 require_relative 'link_state_packet.rb'
 require_relative 'graph_builder.rb'
 
+#Needed for catching Errno exception
+include Socket::Constants
+
 class FloodingUtil
   
   attr_accessor :source_name, :source_ip, :link_state_packet, :link_state_table, :global_top, :port
@@ -12,6 +15,7 @@ class FloodingUtil
   # ------------------------------------------------
   def initialize(source_name, source_ip, port_name, config_file)
     
+    $log.info "init"
     # Set source name field which marks
     # instance of node the flooding util 
     # is running on
@@ -27,8 +31,8 @@ class FloodingUtil
 
     # Construct initial graph 
     @global_top = GraphBuilder.new
-    init_node = GraphNode.new(@source_name, @source_ip)
-    @global_top.addNode(init_node)
+    init_node = GraphBuilder::GraphNode.new(@source_name, @source_ip)
+    @global_top.add_node(init_node)
 
     # Parse config file and set fields for
     # link state instance
@@ -38,13 +42,13 @@ class FloodingUtil
     # Add new neighbors to the global 
     # topology graph
     @link_state_packet.neighbors.keys.each do |(host, ip)|
-    	neighbor = GraphNode.new(host, ip)
+    	neighbor = GraphBuilder::GraphNode.new(host, ip)
     	cost = @link_state_packet.neighbors[[host, ip]]
-    	@global_top.addNode(neighbor)
-    	@global_top.addEdge(init_node, neighbor, cost)
+    	@global_top.add_node(neighbor)
+    	@global_top.add_edge(init_node, neighbor, cost)
     end
 
-    @log.info(@link_state_packet.inspect)
+    $log.info(@link_state_packet.inspect)
     # Flood network
     flood_neighbors(@link_state_packet)
   end
@@ -58,12 +62,21 @@ class FloodingUtil
     # Use tcp sockets to send out the link
     # state packet to all of its neighbors
     ls_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
-        # Send packet 
+      
+      # Send packet 
+      $log.debug "sending lsp to #{neighbor_ip}:#{@port}. lsp json: #{ls_packet.to_json.inspect}"
+     
+      begin
         socket = TCPSocket.open(neighbor_ip, @port)
         socket.print(ls_packet.to_json)
-		
-		# Close socket in use
-    	socket.close    
+        # Close socket in use
+        socket.close    
+      rescue Errno::ECONNREFUSED => e
+        #TODO handle this. Could mean link or node is down
+        $log.warn "Conection refused to #{neighbor_ip}:#{@port}"
+      end
+
+
     end
   end
 
@@ -83,8 +96,8 @@ class FloodingUtil
       ls_packet.neighbors.keys.each do |(host, ip)| 
         neighbor = GraphNode.new(@host, @ip)
         cost = ls_packet.neighbors[[host, ip]]
-        @global_top.addNode(neighbor)
-        @global_top.addEdge(init_node, neighbor, cost)
+        @global_top.add_node(neighbor)
+        @global_top.add_edge(init_node, neighbor, cost)
       end
 	    
     # If link state is already in the table check its seq numb
@@ -115,12 +128,11 @@ class FloodingUtil
   # state packets
   # ---------------------------------------------
   def parse_config(config_file)
-    $log.info("About to read file")
 
     
     File.open(config_file, "r").readlines.each do |line|
 
-      $log.info("go line #{line}")
+      $log.info("config line #{line}")
 
       nodes = line.split(',')
 

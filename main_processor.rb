@@ -14,6 +14,10 @@ node_time = Time.now
 
 #Call on Flooding Utility to create link state packets and carry out flooding
 flood_thread = Thread.new { 
-  flood = FloodingUtil.new()
-  
+  #TODO pass in 
+  flood = FloodingUtil.new("n1", "10.0.0.20", 4000, "./pa3.r-scenarios/s1/weights.csv")
+  $log.info "flood returned #{flood.inspect}"
 }
+
+#Need this to confirm thread is finished or to know thread got an exception
+flood_thread.join
