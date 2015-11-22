@@ -13,6 +13,12 @@ class FloodingUtil
   # Initialize the flooding util with the info
   # needed for the link state packet
   # ------------------------------------------------
+  #TODO source will usually have several ip addresses for each link
+  #Maybe make source_ip a set where every hostname maps to an outgoing link
+  #example for 
+  #n1 (outgoing ip: 10.0.0.20) -> n2
+  #n1 (outgoing ip: 10.0.2.20) -> n3
+  #source_ip will be {"n2" => 10.0.0.20 , "n3" => 10.0.2.20}
   def initialize(source_name, source_ip, port_name, config_file)
     
     $log.info "init"
@@ -65,14 +71,29 @@ class FloodingUtil
       
       # Send packet 
       $log.debug "sending lsp to #{neighbor_ip}:#{@port}. lsp json: #{ls_packet.to_json.inspect}"
-     
+    
+      sock_failure_count = 0
+
       begin
         socket = TCPSocket.open(neighbor_ip, @port)
         socket.print(ls_packet.to_json)
         # Close socket in use
-        socket.close    
+        socket.close
       rescue Errno::ECONNREFUSED => e
+        
+        sock_failure_count = sock_failure_count + 1
+
+        #retry if debuging
+        if $debug and sock_failure_count < 60
+           #give up to 1 minute to connect if not link or host is down
+          sleep 1
+          $log.warn "Conection refused to #{neighbor_ip}:#{@port}"
+          $log.warn "Retrying to connect"
+          retry
+        end
+
         #TODO handle this. Could mean link or node is down
+        #TODO test if this handles links that are down.
         $log.warn "Conection refused to #{neighbor_ip}:#{@port}"
       end
 
@@ -109,7 +130,7 @@ class FloodingUtil
       @link_state_table[ls_packet.source_name] = ls_packet.seq_numb
 
       #Update global topology graph 
-	  @global_top.replace_sub_topology(ls_packet.source_name, ls_packet.source_ip, ls_packet.neighbors)
+	    @global_top.replace_sub_topology(ls_packet.source_name, ls_packet.source_ip, ls_packet.neighbors)
       
       # Flood network with packe
       flood_neighbors(ls_packet)
