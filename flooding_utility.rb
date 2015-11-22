@@ -90,15 +90,14 @@ class FloodingUtil
         #retry if debuging
         if $debug and sock_failure_count < 60
            #give up to 1 minute to connect if not link or host is down
-          sleep 1
+          sleep 1 #TODO remove
           $log.warn "Conection refused to #{neighbor_ip}:#{@port}"
-          $log.warn "Retrying to connect"
           retry
         end
 
         #TODO handle this. Could mean link or node is down
         #TODO test if this handles links that are down.
-        $log.warn "Conection refused to #{neighbor_ip}:#{@port}"
+        $log.warn "Conection refused to #{neighbor_ip}:#{@port} will not retry"
       end
 
 

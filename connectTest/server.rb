@@ -4,7 +4,7 @@ server = TCPServer.new 5000 # Server bound to port 2000
 
 loop do
   client = server.accept    # Wait for a client to connect
-  client.puts "Hello !"
-  client.puts "Time is #{Time.now}"
+  puts client.gets
+  client.puts "Here a message!!!"
   client.close
 end
