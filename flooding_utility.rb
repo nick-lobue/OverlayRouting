@@ -14,7 +14,7 @@ class FloodingUtil
   # needed for the link state packet
   # ------------------------------------------------
   #TODO source will usually have several ip addresses for each link
-  #Maybe make source_ip a set where every hostname maps to an outgoing link
+  #Maybe make source_ip a hash where every hostname maps to an outgoing link
   #example for 
   #n1 (outgoing ip: 10.0.0.20) -> n2
   #n1 (outgoing ip: 10.0.2.20) -> n3
@@ -55,7 +55,11 @@ class FloodingUtil
     end
 
     $log.info(@link_state_packet.inspect)
-    # Flood network
+
+  end
+
+  # Flood network with initial link state packet
+  def initial_flood
     flood_neighbors(@link_state_packet)
   end
 
@@ -76,7 +80,7 @@ class FloodingUtil
 
       begin
         socket = TCPSocket.open(neighbor_ip, @port)
-        socket.print(ls_packet.to_json)
+        socket.puts(ls_packet.to_json)
         # Close socket in use
         socket.close
       rescue Errno::ECONNREFUSED => e
