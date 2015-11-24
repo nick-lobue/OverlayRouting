@@ -7,6 +7,8 @@ require_relative 'graph_builder.rb'
 require_relative 'flooding_utility.rb'
 require_relative 'dijkstra_executor.rb'
 
+$log = Logger.new(STDOUT)
+$log.level = Logger::DEBUG
 
 # --------------------------------------------
 # Holds the operations needed to combine
@@ -47,6 +49,7 @@ class MainProcessor
 	# @param node_hostname String for node's host name.
 	# -------------------------------------------------------
 	def extract_ip_and_port(weights_filepath, ports_filepath, node_hostname)
+
 		File.open(weights_filepath).each do |line|
 			if line =~ /#{node_hostname}\s*,\s*([\d\.]+)/
 				@source_ip_address = $1
@@ -211,7 +214,7 @@ class MainProcessor
 
 		# running infinite loop and reading user commands
 		loop {
-			inputted_command = gets
+			inputted_command = STDIN.gets
 
 			# if stdin contains some text then parse it
 			if inputted_command != ""
