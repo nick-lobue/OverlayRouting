@@ -1,5 +1,6 @@
 require 'time'
 require 'socket'
+require 'thread'
 
 require_relative 'link_state_packet.rb'
 require_relative 'graph_builder.rb'

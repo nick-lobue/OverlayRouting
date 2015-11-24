@@ -16,6 +16,7 @@ class GraphBuilder
 	# if and how many times a graph has been updated.
 	# ---------------------------------------------------
 	def initialize()
+		#GraphNode.hostname => GraphNode
 		@graph = Hash.new
 		@sequence_number = 0
 	end
@@ -33,10 +34,25 @@ class GraphBuilder
 		# @param ip_address Specifies the node's ip.
 		# @param neighbors Provides the set of edges from this node.
 		# -------------------------------------------------------------
-		def initialize(host_name, ip_address, neighbors = nil)
+		def initialize(host_name, ip_address, neighbors = Hash.new)
 			@host_name = host_name
 			@ip_address = ip_address
 			@neighbors = neighbors
+
+			#used for dijkstras
+			@distance = nil
+			@parent = nil
+
+			#If it is directly connected to s then s can forward to this node directly
+			#Note: Even if this is true it might be possible that s doesn't route to this ever
+			@is_forward_node = false
+
+			#The GraphNode from which a source node will have to forward to 
+			#if it wants to reach this node
+			#e.g. network: S -> A -> D if S is the source then GraphNode D
+			#will have A as it's forward node.
+			#Used to construct routing table.
+			@next_hop = nil
 		end
 
 		# -----------------------------------------
@@ -49,7 +65,7 @@ class GraphBuilder
 
 		
 		# setters/getters
-		attr_accessor :host_name, :ip_address, :neighbors
+		attr_accessor :host_name, :ip_address, :neighbors, :distance, :parent, :is_forward_node, :next_hop
 
 	end
 
@@ -111,6 +127,8 @@ class GraphBuilder
 			start_node.neighbors[new_edge_1.end_node.host_name] = new_edge_1
 			@graph[start_node.host_name] = start_node
 		else
+			puts start_node.inspect
+			puts end_node.inspect
 			@graph[start_node.host_name].neighbors[new_edge_1.end_node.host_name] = new_edge_1
 		end
 
@@ -189,6 +207,8 @@ class GraphBuilder
 		return self
 	end
 
+
+
 	# -------------------------------------------------
 	# Returns the GraphNode object associated
 	# with the given host_name. If no node exists,
@@ -201,21 +221,20 @@ class GraphBuilder
 	end
 
 	# ----------------------------------------------------------
-	# Replaces the old topology in the global topology
-	# graph by the new topology.
+	# Replaces the old local topology in the global topology
+	# graph by the new local topology.
 	# @param source_hostname Hostname of node that changed.
 	# @param source_ip Ip address of the node being changed.
 	# @param new_topology Newly updated local topology.
-	# @param old_topology Old version of the local topology.
 	# @return self for method chaining.
 	# ----------------------------------------------------------
-	def replace_sub_topology(source_hostname, source_ip, new_topology, old_topology)
+	def replace_sub_topology(source_hostname, source_ip, new_topology)
 		source_node = GraphNode.new(source_hostname, source_ip)
 
 		# removing all edges associated with the old topology
 		if @graph[source_hostname] != nil
-			old_topology.each { |(host_name, ip), cost|
-				self.remove_edge(source_node, GraphNode.new(host_name, ip))
+			@graph[source_hostname].neighbors.values.each { |edge|
+				self.remove_edge(source_node, edge.end_node)
 			}
 		end
 
