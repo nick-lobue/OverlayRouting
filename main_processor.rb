@@ -1,9 +1,10 @@
-require 'link_state_packet'
-require 'graph_builder'
-require 'flooding_utility'
-require 'dijkstra_executor'
 require 'time'
 require 'socket'
+
+require_relative 'link_state_packet.rb'
+require_relative 'graph_builder.rb'
+require_relative 'flooding_utility.rb'
+require_relative 'dijkstra_executor.rb'
 
 
 # --------------------------------------------
@@ -16,7 +17,49 @@ class MainProcessor
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
 	FORCEUPDATE = "^\s*FORCEUPDATE\s*$"
 	CHECKSTABLE = "^\s*CHECKSTABLE\s*$"
+	SHUTDOWN = "^\s*SHUTDOWN\s*$"
 	
+
+	# ------------------------------------------------------
+	# Parses through the configuration file to
+	# obtain the update interval and the file
+	# paths for the other configuration files.
+	# @param config_filepath File path for config file.
+	# ------------------------------------------------------
+	def parse_config_file(config_filepath)
+		File.open(config_filepath).each do |line|
+			if line =~ /\s*updateInterval\s*=\s*(\d+)\s*/
+				@update_interval = $1
+			elsif line =~ /\s*weightFile\s*=\s*(.+)\s*/
+				@weights_config_filepath = $1
+			elsif line =~ /\s*nodes\s*=\s*(.+)\s*/
+				@nodes_config_filepath = $1
+			end
+		end
+	end
+
+	# -------------------------------------------------------
+	# Extracts the current node's ip address and port
+	# number to be used from the given files.
+	# @param weights_filepath File path to get ip address.
+	# @param ports_filepath File path to get port number.
+	# @param node_hostname String for node's host name.
+	# -------------------------------------------------------
+	def extract_ip_and_port(weights_filepath, ports_filepath, node_hostname)
+		File.open(weights_filepath).each do |line|
+			if line =~ /#{node_hostname}\s*,\s*([\d\.]+)/
+				@source_ip_address = $1
+				break
+			end
+		end
+
+		File.open(ports_filepath).each do |line|
+			if line =~ /\s*#{node_hostname}\s*=\s*(\d+)\s*/
+				@source_port = $1
+				break
+			end
+		end
+	end
 
 	# -----------------------------------------------------
 	# Creates instance variables needed for routing
@@ -24,13 +67,18 @@ class MainProcessor
 	# -----------------------------------------------------
 	def initialize(arguments)
 		@node_time = Time.now
-		@source_hostname = arguments[0]
-		@weights_config_filename = arguments[1]
-		@flooding_utility = FloodingUtil.new(source_hostname, @weights_config_filename, arguments[2])
+		@config_filepath = arguments[0]
+		@source_hostname = arguments[1]
+
+		# parse files to get network information
+		parse_config_file(@config_filepath)
+		extract_ip_and_port(@weights_config_filepath, @nodes_config_filepath, @source_hostname)
+
+		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip_address, @source_port, @weights_config_filepath)
 		@routing_table = nil
 		@routing_table_updating = false
-		@link_state_socket = TCPServer.open(insert_port_here)
-		@control_message_socket = TCPServer.open(insert_port_here)
+		@link_state_socket = TCPServer.open(@source_port)
+		#@control_message_socket = TCPServer.open(@source_port)
 	end
 
 	# ---------------------------------------------------
@@ -50,12 +98,12 @@ class MainProcessor
 	# be listening for other messages coming through.
 	# ---------------------------------------------------------------------
 	def control_message_listener
-		loop {
-			Thread.start(@control_message_socket.accept) do |otherNode|
+		#loop {
+		#	Thread.start(@control_message_socket.accept) do |otherNode|
 				# handle the control messages and perform operations
 				# this isn't needed until Part 2
-			end
-		}
+		#	end
+		#}
 	end
 
 	# ---------------------------------------------------------------------
@@ -68,12 +116,19 @@ class MainProcessor
 	def link_state_packet_listener
 		loop {
 			Thread.start(@link_state_socket.accept) do |otherNode|
-				link_state_packet = LinkStatePacket.from_string(otherNode.gets)
+				received_json = ""
+
+				# receive the json info from the node
+				while data = otherNode.gets
+					received_json += data
+				end
+
+				link_state_packet = LinkStatePacket.from_json(received_json)
 
 				# flood the received packet, update topology graph, and update routing table
 				@flooding_utility.check_link_state_packet(link_state_packet)
 				@routing_table_updating = true
-				@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top.graph, source_hostname)
+				@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top.graph, @source_hostname)
 				@routing_table_updating = false
 
 				otherNode.close
@@ -91,13 +146,13 @@ class MainProcessor
 	def perform_dumptable(filename)
 		filename = filename + ".csv" if filename !~ /.csv/
 
-		# creating the file and writing 
-		# MAY NEED TO CHANGE DEPENDING ON ROUTING TABLE BUILD
-		#####################################################
+		# creating the file and writing routing table information
 		File.open(filename, "w+") { |file|
-			@routing_table.each { |destination, info|
-				file.puts("#{@source_hostname},#{info.destIp},#{info.nextHop},#{info.distance}")
-			}
+			if @routing_table != nil
+				@routing_table.each { |destination, info|
+					file.puts("#{@source_ip_address},#{info.destination.ip},#{info.next_hop.ip},#{info.distance}")
+				}
+			end
 
 			file.close
 		}
@@ -112,7 +167,7 @@ class MainProcessor
 	# packet didn't change this function will do nothing.
 	# -----------------------------------------------------------------
 	def perform_forceupdate
-		packet_changed = @flooding_utility.has_changed(@weights_config_filename)
+		packet_changed = @flooding_utility.has_changed(@weights_config_filepath)
 
 		if (packet_changed)
 			@routing_table_updating = true
@@ -133,6 +188,14 @@ class MainProcessor
 		else
 			$stdout.puts("yes")
 		end
+	end
+
+	# ----------------------------------------------------------------
+	# Performs the SHUTDOWN command...
+	# ----------------------------------------------------------------
+	def perform_shutdown
+		# shutdown all open sockets
+		# print current buffer information
 	end
 
 	# -------------------------------------------------
@@ -157,6 +220,8 @@ class MainProcessor
 					Thread.new { perform_forceupdate }
 				elsif /#{CHECKSTABLE}/.match(inputted_command)
 					Thread.new { perform_checkstable }
+				elsif /#{SHUTDOWN}/.match(inputted_command)
+					Thread.new { perform_shutdown }
 				else
 					$stderr.puts("Incorrect command was provided.")
 				end
