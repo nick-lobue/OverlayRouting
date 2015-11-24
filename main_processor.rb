@@ -83,9 +83,12 @@ def debug_flood
       	#wait until packets are available to process
       	lsp_available.wait(lsp_queue_mutex)
 
+      	lsp = lsp_queue.pop
+      	$log.debug "received LSP #{lsp.inspect}"
+
 	    #Process all link state packets from the client
 	    until lsp_queue.empty? do
-	      flood.check_link_state_packet(lsp_queue.pop)
+	      flood.check_link_state_packet(lsp)
 	    end
 
 	  }

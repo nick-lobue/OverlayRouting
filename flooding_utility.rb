@@ -83,6 +83,7 @@ class FloodingUtil
         socket.puts(ls_packet.to_json)
         # Close socket in use
         socket.close
+        $log.debug "Successfully sent lsp to #{neighbor_ip}:#{@port}"
       rescue Errno::ECONNREFUSED => e
         
         sock_failure_count = sock_failure_count + 1
@@ -124,6 +125,9 @@ class FloodingUtil
         @global_top.add_edge(init_node, neighbor, cost)
       end
 	    
+      # Flood network with packet
+      flood_neighbors(ls_packet)
+
     # If link state is already in the table check its seq numb
     # against the recieved link state packet if it did change 
     # we want to update the table and flood
@@ -135,14 +139,15 @@ class FloodingUtil
       #Update global topology graph 
 	    @global_top.replace_sub_topology(ls_packet.source_name, ls_packet.source_ip, ls_packet.neighbors)
       
-      # Flood network with packe
+      # Flood network with packet
       flood_neighbors(ls_packet)
 
     # If the recieved link state packet is in the table and
     # has the previously recorded sequence number we want
     # to drop the packet
-    else        
+    else 
        # Do nothing aka drop the packet
+      $log.debug "dropping packet #{@link_state_table[ls_packet.source_name]}"
     end
   end
 
