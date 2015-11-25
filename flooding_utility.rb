@@ -93,7 +93,7 @@ class FloodingUtil
         if $debug and sock_failure_count < 60
            #give up to 1 minute to connect if not link or host is down
           sleep 1 #TODO remove
-          $log.warn "Conection refused to #{neighbor_ip}:#{@port}"
+          $log.warn "Conection refused to #{neighbor_ip}:#{@port_hash[neighbor_name]}"
           retry
         end
 
@@ -283,8 +283,11 @@ class FloodingUtil
     File.open(file, "r").readlines.each do |line|
       nodes = line.split('=')
 
-      @port_hash[nodes.first] = nodes[2]
+      @port_hash[nodes.first] = nodes[1].chomp
     end
+
+    $log.debug("Created port hash #{port_hash.inspect}")
+
   end    
 end
 

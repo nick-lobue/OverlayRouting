@@ -71,6 +71,8 @@ class MainProcessor
 	# -----------------------------------------------------
 	def initialize(arguments)
 
+		$debug = true #TODO set to false on submission
+
 		if arguments.length != 2
 			puts "Usage: ruby main_processor.rb [config file] [source hostname]"
 		end
