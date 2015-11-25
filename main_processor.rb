@@ -70,15 +70,22 @@ class MainProcessor
 	# table construction.
 	# -----------------------------------------------------
 	def initialize(arguments)
+
+		if arguments.length != 2
+			puts "Usage: ruby main_processor.rb [config file] [source hostname]"
+		end
+
 		@node_time = Time.now
 		@config_filepath = arguments[0]
 		@source_hostname = arguments[1]
+
+		$log.debug("config_filepath: #{@config_filepath} source_hostname: #{@source_hostname}")
 
 		# parse files to get network information
 		parse_config_file(@config_filepath)
 		extract_ip_and_port(@weights_config_filepath, @nodes_config_filepath, @source_hostname)
 
-		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip_address, @source_port, @weights_config_filepath)
+		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip_address, @nodes_config_filepath, @weights_config_filepath)
 		@routing_table = nil
 		@routing_table_updating = false
 		@link_state_socket = TCPServer.open(@source_port)

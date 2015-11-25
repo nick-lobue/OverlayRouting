@@ -279,6 +279,7 @@ class FloodingUtil
     # and the correct ports to run off of
     @port_hash = Hash.new
 
+    
     File.open(file, "r").readlines.each do |line|
       nodes = line.split('=')
 
