@@ -75,10 +75,11 @@ class MainProcessor
 		parse_config_file(@config_filepath)
 		extract_ip_and_port(@weights_config_filepath, @nodes_config_filepath, @source_hostname)
 
+		@link_state_socket = TCPServer.open(@source_port)
 		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip_address, @source_port, @weights_config_filepath)
+		@flooding_utility.initial_flood
 		@routing_table = nil
 		@routing_table_updating = false
-		@link_state_socket = TCPServer.open(@source_port)
 		#@control_message_socket = TCPServer.open(@source_port)
 	end
 
@@ -89,7 +90,10 @@ class MainProcessor
 	# control message operations and routing updates.
 	# ---------------------------------------------------
 	def update_time
-		# update the node's system time
+		loop {
+			@node_time += 0.001
+			sleep(0.001)
+		}
 	end
 
 	# ---------------------------------------------------------------------
@@ -211,7 +215,8 @@ class MainProcessor
 
 		# running infinite loop and reading user commands
 		loop {
-			inputted_command = gets
+			print("Enter command or hook to perform: ")
+			inputted_command = gets.chomp
 
 			# if stdin contains some text then parse it
 			if inputted_command != ""
@@ -223,8 +228,6 @@ class MainProcessor
 					Thread.new { perform_checkstable }
 				elsif /#{SHUTDOWN}/.match(inputted_command)
 					Thread.new { perform_shutdown }
-				else
-					$stderr.puts("Incorrect command was provided.")
 				end
 			end
 		}
