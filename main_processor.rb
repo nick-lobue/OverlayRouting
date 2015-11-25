@@ -7,6 +7,8 @@ require_relative 'graph_builder.rb'
 require_relative 'flooding_utility.rb'
 require_relative 'dijkstra_executor.rb'
 
+$log = Logger.new(STDOUT)
+$log.level = Logger::DEBUG
 
 # --------------------------------------------
 # Holds the operations needed to combine
@@ -47,6 +49,7 @@ class MainProcessor
 	# @param node_hostname String for node's host name.
 	# -------------------------------------------------------
 	def extract_ip_and_port(weights_filepath, ports_filepath, node_hostname)
+
 		File.open(weights_filepath).each do |line|
 			if line =~ /#{node_hostname}\s*,\s*([\d\.]+)/
 				@source_ip_address = $1
@@ -67,19 +70,32 @@ class MainProcessor
 	# table construction.
 	# -----------------------------------------------------
 	def initialize(arguments)
+
+		$debug = true #TODO set to false on submission
+
+		if arguments.length != 2
+			puts "Usage: ruby main_processor.rb [config file] [source hostname]"
+		end
+
 		@node_time = Time.now
 		@config_filepath = arguments[0]
 		@source_hostname = arguments[1]
+
+		$log.debug("config_filepath: #{@config_filepath} source_hostname: #{@source_hostname}")
 
 		# parse files to get network information
 		parse_config_file(@config_filepath)
 		extract_ip_and_port(@weights_config_filepath, @nodes_config_filepath, @source_hostname)
 
-		@link_state_socket = TCPServer.open(@source_port)
-		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip_address, @source_port, @weights_config_filepath)
-		@flooding_utility.initial_flood
+		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip_address, @nodes_config_filepath, @weights_config_filepath)
+
 		@routing_table = nil
 		@routing_table_updating = false
+		@link_state_socket = TCPServer.open(@source_port)
+
+    	#flood initial link state packet
+    	@flooding_utility.initial_flood
+		
 		#@control_message_socket = TCPServer.open(@source_port)
 	end
 
@@ -215,11 +231,10 @@ class MainProcessor
 
 		# running infinite loop and reading user commands
 		loop {
-			print("Enter command or hook to perform: ")
-			inputted_command = gets.chomp
+			inputted_command = STDIN.gets
 
 			# if stdin contains some text then parse it
-			if inputted_command != ""
+			if inputted_command != nil && inputted_command != ""
 				if /#{DUMPTABLE}/.match(inputted_command)
 					Thread.new { perform_dumptable($1) }
 				elsif /#{FORCEUPDATE}/.match(inputted_command)
