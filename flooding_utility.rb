@@ -125,7 +125,10 @@ class FloodingUtil
         @global_top.add_node(neighbor)
         @global_top.add_edge(init_node, neighbor, cost)
       end
-	    
+
+    # Flood network with packe
+    flood_neighbors(ls_packet) 
+
     # If link state is already in the table check its seq numb
     # against the recieved link state packet if it did change 
     # we want to update the table and flood
