@@ -7,7 +7,7 @@ include Socket::Constants
 
 class FloodingUtil
   
-  attr_accessor :source_name, :source_ip, :link_state_packet, :link_state_table, :global_top, :port
+  attr_accessor :source_name, :source_ip, :link_state_packet, :link_state_table, :global_top, :port_hash
 
   # ------------------------------------------------
   # Initialize the flooding util with the info
@@ -19,7 +19,7 @@ class FloodingUtil
   #n1 (outgoing ip: 10.0.0.20) -> n2
   #n1 (outgoing ip: 10.0.2.20) -> n3
   #source_ip will be {"n2" => 10.0.0.20 , "n3" => 10.0.2.20}
-  def initialize(source_name, source_ip, port_name, config_file)
+  def initialize(source_name, source_ip, port_file, config_file)
     
     $log.info "init"
     # Set source name field which marks
@@ -27,7 +27,9 @@ class FloodingUtil
     # is running on
     @source_name = source_name
     @source_ip = source_ip
-    @port = port_name
+
+    # Parse the port file
+    parse_port(port_file)
     
 
     # Initialize link state table and insert
@@ -79,7 +81,7 @@ class FloodingUtil
       sock_failure_count = 0
 
       begin
-        socket = TCPSocket.open(neighbor_ip, @port)
+        socket = TCPSocket.open(neighbor_ip, @port_hash[neighbor_name])
         socket.puts(ls_packet.to_json)
         # Close socket in use
         socket.close
@@ -261,7 +263,25 @@ class FloodingUtil
 	# Flood network with updated packet
 	flood_neighbors(@link_state_packet)
 
-  end   
+  end
+
+  # ---------------------------------------
+  # Utility method used to parse out the 
+  # ports that each of the nodes need to 
+  # connect to
+  # ---------------------------------------
+  def parse_port(file)
+
+    # Initialize port hash to store the node names 
+    # and the correct ports to run off of
+    @port_hash = Hash.new
+
+    File.open(file, "r").readlines.each do |line|
+      nodes = line.split('=')
+
+      @port_hash[nodes.first] = nodes[2]
+    end
+  end    
 end
 
 
