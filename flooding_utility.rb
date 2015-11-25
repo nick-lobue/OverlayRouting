@@ -56,7 +56,7 @@ class FloodingUtil
     	@global_top.add_edge(init_node, neighbor, cost)
     end
 
-    $log.info(@link_state_packet.inspect)
+    $log.info("Initial FloodUtil LSP: #{@link_state_packet.inspect}")
 
   end
 

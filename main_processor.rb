@@ -79,6 +79,10 @@ class MainProcessor
 		extract_ip_and_port(@weights_config_filepath, @nodes_config_filepath, @source_hostname)
 
 		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip_address, @source_port, @weights_config_filepath)
+
+    #flood initial link state packet
+    @flooding_utility.initial_flood
+
 		@routing_table = nil
 		@routing_table_updating = false
 		@link_state_socket = TCPServer.open(@source_port)
