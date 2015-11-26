@@ -21,7 +21,6 @@ class FloodingUtil
   #source_ip will be {"n2" => 10.0.0.20 , "n3" => 10.0.2.20}
   def initialize(source_name, source_ip, port_file, config_file)
     
-    $log.info "init"
     # Set source name field which marks
     # instance of node the flooding util 
     # is running on
@@ -121,7 +120,7 @@ class FloodingUtil
     # Check first if the given link state
     # packets source node is in the table
     if @link_state_table[ls_packet.source_name] == nil
-      
+
       @link_state_table[ls_packet.source_name] = ls_packet.seq_numb
 
       # Build graph
@@ -132,7 +131,6 @@ class FloodingUtil
       #added edges from the origin to origin's neighbors
       ls_packet.neighbors.keys.each do |(host,ip)|
 
-        puts "#{ip}:#{host}"
         if host.nil? or ip.nil?
           throw :invalid_lsp
         end

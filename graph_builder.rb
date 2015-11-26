@@ -114,7 +114,7 @@ class GraphBuilder
 	# @return self for chaining calls.
 	# --------------------------------------------------------------------
 	def add_edge(start_node, end_node, edge_cost)
-		
+
 		if start_node.host_name.nil? or end_node.host_name.nil?
 			throw :invalid_hostname
 		end
@@ -132,8 +132,8 @@ class GraphBuilder
 			start_node.neighbors[new_edge_1.end_node.host_name] = new_edge_1
 			@graph[start_node.host_name] = start_node
 		else
-			puts start_node.inspect
-			puts end_node.inspect
+			#$log.debug "start node: #{start_node.inspect}"
+			#$log.debug "end node: #{end_node.inspect}"
 			@graph[start_node.host_name].neighbors[new_edge_1.end_node.host_name] = new_edge_1
 		end
 

@@ -146,7 +146,6 @@ class DijkstraExecutor
     #unreachable nodes
     unreachable = Set.new
 
-    $log.debug not_processed.inspect
 
 		until not_processed.empty?
 			curr_node = not_processed.extract_min
