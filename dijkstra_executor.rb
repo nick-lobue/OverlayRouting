@@ -207,7 +207,8 @@ class DijkstraExecutor
   def self.relax_neighbors(curr_node, completed)
     curr_node.neighbors.values.each{ |edge|
       neighbor = edge.end_node
-      relax_distance = curr_node.distance + self.weight(curr_node, neighbor)
+
+      relax_distance = curr_node.distance + self.weight(curr_node, neighbor).to_i
 
       #relax is relax distance is less than v.distance or if v.distance DNE
       if neighbor.distance.nil? or neighbor.distance > relax_distance

@@ -123,9 +123,17 @@ class FloodingUtil
     if @link_state_table[ls_packet.source_name] == nil
       @link_state_table[ls_packet.source_name] = ls_packet.seq_numb
       # Build graph
-      ls_packet.neighbors.keys.each do |(host, ip)| 
-        neighbor = GraphBuilder::GraphNode.new(@host, @ip)
+      $log.debug "adding #{ls_packet.neighbors.keys} to graph"
+      ls_packet.neighbors.keys.each do |(host,ip)|
+
+        puts "#{ip}:#{host}"
+        if host.nil? or ip.nil?
+          throw :invalid_lsp
+        end
+
+        neighbor = GraphBuilder::GraphNode.new(host, ip)
         cost = ls_packet.neighbors[[host, ip]]
+        
         @global_top.add_node(neighbor)
         @global_top.add_edge(@init_node, neighbor, cost)
       end
@@ -152,6 +160,7 @@ class FloodingUtil
     # to drop the packet
     else        
        # Do nothing aka drop the packet
+       $log.debug "Dropping LSP packet #{ls_packet.inspect}"
     end
   end
 

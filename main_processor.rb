@@ -87,6 +87,13 @@ class MainProcessor
 		parse_config_file(@config_filepath)
 		extract_ip_and_port(@weights_config_filepath, @nodes_config_filepath, @source_hostname)
 
+		#A queue containing link state packets
+		@lsp_queue = Array.new
+		#A lock on lsp_queue
+		@lsp_queue_mutex = Mutex.new
+		#A conditional variable indicating there is link state packets to process
+		@lsp_to_process = ConditionVariable.new
+
 		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip_address, @nodes_config_filepath, @weights_config_filepath)
 
 		@routing_table = nil
@@ -127,6 +134,38 @@ class MainProcessor
 		#}
 	end
 
+	#Pops link state packets and calls check_link_state_packet on each of them
+	#After checking all of them it updates the routing table
+	#Then it waits until more data is added in the queue
+	def link_state_packet_processor
+		@lsp_queue_mutex.synchronize {
+
+			$log.debug "link_state_packet_processor: Waiting for lsp to process"
+			#Wait until there are link state packets in queue
+			@lsp_to_process.wait(@lsp_queue_mutex)
+
+			#pop and process all available link state packets
+			while link_state_packet = @lsp_queue.pop
+				$log.debug "Processing #{link_state_packet.inspect}"
+
+				# flood the received packet, update topology graph, and update routing table
+				@flooding_utility.check_link_state_packet(link_state_packet)
+			end
+		}
+
+		#TODO: Optimization: Don't update routing table when 
+
+		@routing_table_updating = true
+
+		$log.debug "Global topology: #{@flooding_utility.global_top.graph.inspect}"
+
+		@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top, @source_hostname)
+		$log.info "Routing table updated"
+		@routing_table.print_routing if $debug
+
+		@routing_table_updating = false
+	end
+
 	# ---------------------------------------------------------------------
 	# Listens for incoming connections to facilitate link
 	# state packet transmission. Once a link state packet has arrived,
@@ -136,26 +175,24 @@ class MainProcessor
 	# ---------------------------------------------------------------------
 	def link_state_packet_listener
 		loop {
+
 			Thread.start(@link_state_socket.accept) do |otherNode|
 				received_json = ""
 
-				# receive the json info from the node
-				while data = otherNode.gets
-					received_json += data
-				end
+				@lsp_queue_mutex.synchronize {
+					# receive the json info from the node
+					#convert to LinkStatePacket
+					#Push to lsp_queue
+					while lsp_str = otherNode.gets
+						$log.debug "Received data #{lsp_str}"
+						link_state_packet = LinkStatePacket.from_json(lsp_str)
+						@lsp_queue.push link_state_packet
+					end
 
-				link_state_packet = LinkStatePacket.from_json(received_json)
+					#signal other threads waiting for lsp_queue to contain data
+					@lsp_to_process.broadcast
 
-				#TODO if dropped don't update routing table
-				# flood the received packet, update topology graph, and update routing table
-				@flooding_utility.check_link_state_packet(link_state_packet)
-
-
-				@routing_table_updating = true
-				@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top, @source_hostname)
-				$log.info "Routing table updated #{@routing_table.inspect}"
-
-				@routing_table_updating = false
+				}
 
 				otherNode.close
 			end
@@ -233,7 +270,8 @@ class MainProcessor
 		Thread.abort_on_exception = true
 		threads = [ Thread.new { update_time }, 
 					Thread.new { control_message_listener }, 
-					Thread.new { link_state_packet_listener } ]
+					Thread.new { link_state_packet_listener },
+					Thread.new { link_state_packet_processor } ]
 
 		# running infinite loop and reading user commands
 		loop {

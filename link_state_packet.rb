@@ -9,15 +9,24 @@ class LinkStatePacket
 	# the neighbors of the node
 	# ---------------------------------------
 	def initialize(source_name, source_ip, seq_numb, neighbors)
+
+		if source_name.nil? or source_ip.nil? or seq_numb.nil?
+			throw :invalid_argument
+		end
+
+		if neighbors.class.name != "Hash" and not neighbors.nil?
+			$log.debug "neighbors type: #{neighbors.class}"
+			throw :invalid_argument_wrong_type
+		end
+
 		@source_name = source_name
 		@source_ip = source_ip
 		@seq_numb = seq_numb
-		@neighbors = Hash.new
 
 		# If the neighbors parameter is nil then 
 		# initialize the link state packet to have
 		# an empty hash
-		if neighbors == nil
+		if neighbors.nil?
 			@neighbors = Hash.new
 		else
 			@neighbors = neighbors
@@ -40,7 +49,20 @@ class LinkStatePacket
 	# -------------------------------------
 	def self.from_json(input)
 		data = JSON.parse(input)
-		return LinkStatePacket.new(data['source_name'], data['source_ip'], 
+
+		lsp = LinkStatePacket.new(data['source_name'], data['source_ip'], 
 			data['seq_numb'].to_i, data['neighbors'])
+
+		#keys are arrays and need to be parsed separetly
+		unless data['neighbors'].nil?
+			parsed_neighbors = Hash.new
+			data['neighbors'].each_pair { |key, pair|
+				parsed_neighbors[JSON.parse(key)] = pair
+			}
+			lsp.neighbors = parsed_neighbors
+		end
+
+		lsp
+
 	end
 end

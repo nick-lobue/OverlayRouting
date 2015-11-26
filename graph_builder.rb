@@ -114,6 +114,11 @@ class GraphBuilder
 	# @return self for chaining calls.
 	# --------------------------------------------------------------------
 	def add_edge(start_node, end_node, edge_cost)
+		
+		if start_node.host_name.nil? or end_node.host_name.nil?
+			throw :invalid_hostname
+		end
+
 		start_node = @graph[start_node.host_name] if @graph[start_node.host_name] != nil
 		end_node = @graph[end_node.host_name] if @graph[end_node.host_name] != nil
 
@@ -170,6 +175,9 @@ class GraphBuilder
 	# @return self for method chaining
 	# --------------------------------------------------
 	def add_node(new_node)
+		if new_node.host_name.nil?
+			throw :invalid_hostname
+		end
 		if @graph[new_node.host_name] == nil
 			@graph[new_node.host_name] = new_node
 
