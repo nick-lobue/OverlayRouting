@@ -196,28 +196,6 @@ class DijkstraExecutor
 
 		end
 
-
-    def self.relax_neighbors(curr_node, completed)
-      curr_node.neighbors.values.each{ |edge|
-        neighbor = edge.end_node
-        relax_distance = curr_node.distance + self.weight(curr_node, neighbor)
-
-        #relax is relax distance is less than v.distance or if v.distance DNE
-        if neighbor.distance.nil? or neighbor.distance > relax_distance
-
-          if(completed.include? neighbor)
-            #A node is not supposed to be updated if it is in completed
-            throw :updating_node_in_completed
-          end
-
-          $log.debug "Updating v: #{neighbor.host_name} old distance #{neighbor.distance} relaxed to #{relax_distance}"
-          neighbor.distance = relax_distance
-          neighbor.parent = curr_node
-        end
-
-      }
-    end
-
 		#Ending state:
 		#Each node has a parent pointer that eventually leads back to s
 		#a distance that gets the total weight from s
@@ -225,6 +203,27 @@ class DijkstraExecutor
     return routing_table
   end
 
+
+  def self.relax_neighbors(curr_node, completed)
+    curr_node.neighbors.values.each{ |edge|
+      neighbor = edge.end_node
+      relax_distance = curr_node.distance + self.weight(curr_node, neighbor)
+
+      #relax is relax distance is less than v.distance or if v.distance DNE
+      if neighbor.distance.nil? or neighbor.distance > relax_distance
+
+        if completed.include? neighbor
+          #A node is not supposed to be updated if it is in completed
+          throw :updating_node_in_completed
+        end
+
+        $log.debug "Updating v: #{neighbor.host_name} old distance #{neighbor.distance} relaxed to #{relax_distance}"
+        neighbor.distance = relax_distance
+        neighbor.parent = curr_node
+      end
+
+    }
+  end
 
   def self.weight(source, destination)
     source.neighbors[destination.host_name].edge_cost
