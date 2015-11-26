@@ -274,22 +274,31 @@ class MainProcessor
 					Thread.new { link_state_packet_processor } ]
 
 		# running infinite loop and reading user commands
-		loop {
-			inputted_command = STDIN.gets
+		unless $debug
 
-			# if stdin contains some text then parse it
-			if inputted_command != nil && inputted_command != ""
-				if /#{DUMPTABLE}/.match(inputted_command)
-					Thread.new { perform_dumptable($1) }
-				elsif /#{FORCEUPDATE}/.match(inputted_command)
-					Thread.new { perform_forceupdate }
-				elsif /#{CHECKSTABLE}/.match(inputted_command)
-					Thread.new { perform_checkstable }
-				elsif /#{SHUTDOWN}/.match(inputted_command)
-					Thread.new { perform_shutdown }
+		loop {
+
+				inputted_command = STDIN.gets
+
+				# if stdin contains some text then parse it
+				if inputted_command != nil && inputted_command != ""
+					if /#{DUMPTABLE}/.match(inputted_command)
+						Thread.new { perform_dumptable($1) }
+					elsif /#{FORCEUPDATE}/.match(inputted_command)
+						Thread.new { perform_forceupdate }
+					elsif /#{CHECKSTABLE}/.match(inputted_command)
+						Thread.new { perform_checkstable }
+					elsif /#{SHUTDOWN}/.match(inputted_command)
+						Thread.new { perform_shutdown }
+					end
 				end
-			end
 		}
+
+		else
+			#Need to disable reading from STDIB
+			$log.warn "In debugging mode will not accept input to STDIN"
+			loop {} #dies without this
+		end
 	end
 
 end

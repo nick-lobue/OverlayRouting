@@ -1,5 +1,6 @@
 require 'set'
 require 'logger'
+require 'pry'
 
 if $log.nil?
   #main_processor.rb did not call this. In this case create global logger
@@ -190,6 +191,7 @@ class DijkstraExecutor
 
 			end
 
+			#binding.pry
 			#relax all curr_node's neighbors
       relax_neighbors(curr_node, completed)
 

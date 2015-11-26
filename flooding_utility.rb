@@ -121,9 +121,15 @@ class FloodingUtil
     # Check first if the given link state
     # packets source node is in the table
     if @link_state_table[ls_packet.source_name] == nil
+      
       @link_state_table[ls_packet.source_name] = ls_packet.seq_numb
+
       # Build graph
-      $log.debug "adding #{ls_packet.neighbors.keys} to graph"
+      $log.debug "adding nodes and edges #{ls_packet.source_name} #{ls_packet.neighbors.keys} to graph"
+
+      ls_origin_node = GraphBuilder::GraphNode.new(ls_packet.source_name, ls_packet.source_ip)
+
+      #added edges from the origin to origin's neighbors
       ls_packet.neighbors.keys.each do |(host,ip)|
 
         puts "#{ip}:#{host}"
@@ -131,11 +137,15 @@ class FloodingUtil
           throw :invalid_lsp
         end
 
+
         neighbor = GraphBuilder::GraphNode.new(host, ip)
         cost = ls_packet.neighbors[[host, ip]]
         
         @global_top.add_node(neighbor)
-        @global_top.add_edge(@init_node, neighbor, cost)
+
+        #TODO: cost isn't right n1 to n4 is not 1
+        @global_top.add_edge(ls_origin_node, neighbor, cost)
+
       end
 
     # Flood network with packe
@@ -183,7 +193,7 @@ class FloodingUtil
       if nodes.first == @source_name
         # Check and see if neighbor is already in the hash
         if @link_state_packet.neighbors.has_key?([nodes[2], nodes[3]]) == false
-          @link_state_packet.neighbors[[nodes[2], nodes[3]]] = nodes[4]
+          @link_state_packet.neighbors[[nodes[2], nodes[3]]] = nodes[4].chomp
         end 
        
       # Check if the third node listed in line is the
