@@ -39,8 +39,8 @@ class FloodingUtil
 
     # Construct initial graph 
     @global_top = GraphBuilder.new
-    init_node = GraphBuilder::GraphNode.new(@source_name, @source_ip)
-    @global_top.add_node(init_node)
+    @init_node = GraphBuilder::GraphNode.new(@source_name, @source_ip)
+    @global_top.add_node(@init_node)
 
     # Parse config file and set fields for
     # link state instance
@@ -53,8 +53,12 @@ class FloodingUtil
     	neighbor = GraphBuilder::GraphNode.new(host, ip)
     	cost = @link_state_packet.neighbors[[host, ip]]
     	@global_top.add_node(neighbor)
-    	@global_top.add_edge(init_node, neighbor, cost)
+    	@global_top.add_edge(@init_node, neighbor, cost)
     end
+
+    #TODO should we worry about neighbors changing? 
+    #I'm guessing not since they are defined in config file.
+    @neighbors = @link_state_packet.neighbors
 
     $log.info("Initial FloodUtil LSP: #{@link_state_packet.inspect}")
 
@@ -73,7 +77,7 @@ class FloodingUtil
 
     # Use tcp sockets to send out the link
     # state packet to all of its neighbors
-    ls_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
+    @neighbors.keys.each do |(neighbor_name, neighbor_ip)|
       
       # Send packet 
       $log.debug "sending lsp to #{neighbor_ip}:#{@port}. lsp json: #{ls_packet.to_json.inspect}"
@@ -120,10 +124,10 @@ class FloodingUtil
       @link_state_table[ls_packet.source_name] = ls_packet.seq_numb
       # Build graph
       ls_packet.neighbors.keys.each do |(host, ip)| 
-        neighbor = GraphNode.new(@host, @ip)
+        neighbor = GraphBuilder::GraphNode.new(@host, @ip)
         cost = ls_packet.neighbors[[host, ip]]
         @global_top.add_node(neighbor)
-        @global_top.add_edge(init_node, neighbor, cost)
+        @global_top.add_edge(@init_node, neighbor, cost)
       end
 
     # Flood network with packe

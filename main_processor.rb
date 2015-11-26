@@ -146,10 +146,15 @@ class MainProcessor
 
 				link_state_packet = LinkStatePacket.from_json(received_json)
 
+				#TODO if dropped don't update routing table
 				# flood the received packet, update topology graph, and update routing table
 				@flooding_utility.check_link_state_packet(link_state_packet)
+
+
 				@routing_table_updating = true
-				@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top.graph, @source_hostname)
+				@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top, @source_hostname)
+				$log.info "Routing table updated #{@routing_table.inspect}"
+
 				@routing_table_updating = false
 
 				otherNode.close
@@ -225,6 +230,7 @@ class MainProcessor
 	# a node has to perform.
 	# -------------------------------------------------
 	def process
+		Thread.abort_on_exception = true
 		threads = [ Thread.new { update_time }, 
 					Thread.new { control_message_listener }, 
 					Thread.new { link_state_packet_listener } ]

@@ -117,7 +117,7 @@ class DijkstraExecutor
 	def self.routing_table(graph, source)
 
 		#parameter check
-		if source.class == "String"
+		if source.class.name == "String"
 			#get GraphNode by hostname
 			source = graph.get_node(source)
     end
@@ -191,7 +191,7 @@ class DijkstraExecutor
 			end
 
 			#relax all curr_node's neighbors
-      self.relax_neighbors(curr_node, completed)
+      relax_neighbors(curr_node, completed)
 
 
 		end
