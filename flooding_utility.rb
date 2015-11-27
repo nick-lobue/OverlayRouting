@@ -19,7 +19,7 @@ class FloodingUtil
   #n1 (outgoing ip: 10.0.0.20) -> n2
   #n1 (outgoing ip: 10.0.2.20) -> n3
   #source_ip will be {"n2" => 10.0.0.20 , "n3" => 10.0.2.20}
-  def initialize(source_name, source_ip, port_file, config_file)
+  def initialize(source_name, source_ip, port_hash, config_file)
     
     # Set source name field which marks
     # instance of node the flooding util 
@@ -27,8 +27,7 @@ class FloodingUtil
     @source_name = source_name
     @source_ip = source_ip
 
-    # Parse the port file
-    parse_port(port_file)
+    @port_hash = port_hash
     
 
     # Initialize link state table and insert
@@ -75,7 +74,7 @@ class FloodingUtil
   def flood_neighbors(ls_packet)
 
     # Use tcp sockets to send out the link
-    # state packet to all of its neighbors
+    # state packet to all of current node's neighbors
     @neighbors.keys.each do |(neighbor_name, neighbor_ip)|
       
       # Send packet 
@@ -289,27 +288,7 @@ class FloodingUtil
 
   end
 
-  # ---------------------------------------
-  # Utility method used to parse out the 
-  # ports that each of the nodes need to 
-  # connect to
-  # ---------------------------------------
-  def parse_port(file)
 
-    # Initialize port hash to store the node names 
-    # and the correct ports to run off of
-    @port_hash = Hash.new
-
-    
-    File.open(file, "r").readlines.each do |line|
-      nodes = line.split('=')
-
-      @port_hash[nodes.first] = nodes[1].chomp
-    end
-
-    $log.debug("Created port hash #{port_hash.inspect}")
-
-  end    
 end
 
 

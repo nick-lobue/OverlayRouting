@@ -18,7 +18,7 @@ class Packet
 		if packet_type.eql? "LSP"
 			packet = LinkStatePacket.from_json_hash(data)
 		else
-
+			packet = ControlMessagePacket.from_json_hash(data)
 		end
 
 		return packet, packet_type

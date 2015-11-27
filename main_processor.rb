@@ -96,7 +96,12 @@ class MainProcessor
 		#A queue containing control message packets
 		@cmp_queue = Queue.new
 
-		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip, @nodes_config_filepath, @weights_config_filepath)
+		#A hash to forward queues from hostnames
+		@forward_queue = Queue.new
+
+		@port_hash = parse_port @nodes_config_filepath
+
+		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip, @port_hash, @weights_config_filepath)
 
 		@routing_table = nil
 		@routing_table_updating = false
@@ -129,12 +134,13 @@ class MainProcessor
 
 		payload = Hash.new
 		payload['traceroute_data'] = "" #empty string for nodes to append to
-
+		payload["original_source_name"] = @source_hostname
+		payload["original_source_ip"] = @source_ip
 		control_message_packet = ControlMessagePacket.new(@source_hostname,
 				@source_ip, destination_name, nil, 0, "TRACEROUTE", payload)
 
 		#Send to node
-		forward_queue << control_message_packet
+		@forward_queue << control_message_packet
 	end
 
 	#Handle a traceroute message 
@@ -150,22 +156,26 @@ class MainProcessor
 				#TODO Finally at source handle correctly
 				$log.debug "Traceroute arrived back #{payload.inspect}"
 			else
-				#Data is complete. It is just heading back to original source
-				forward_queue << control_message_packet
+				#Else data is complete. It is just heading back to original source
+				@forward_queue << control_message_packet
 			end
+			
 		else
-			payload["data"] += "TODO append data for #{source_hostname}\n"
+			payload["traceroute_data"] += "TODO append data for #{@source_hostname}\n"
 
 			#Trace Route has reached destination. Send a new packet to original
 			#source with the same data but marked as completed
 			if control_message_packet.destination_name.eql? @source_hostname
 				payload["complete"] = true
-				ControlMessagePacket.new(@source_hostname,
-				@source_ip, destination_name, nil, 0, "TRACEROUTE", payload)
-			end
+				control_message_packet = ControlMessagePacket.new(@source_hostname,
+				@source_ip, control_message_packet.source_name,
+				control_message_packet.source_ip, 0, "TRACEROUTE", payload)
 
+			end
 			control_message_packet.payload = payload
+			@forward_queue << control_message_packet
 		end
+
 
 	end
 
@@ -176,14 +186,15 @@ class MainProcessor
 	# be listening for other messages coming through.
 	# ---------------------------------------------------------------------
 	def control_message_listener
+
+		$log.debug "Started control_message_listener"
 		#pop and process all available control message packets
 		#will block until packets pushed to queue
 		while control_message_packet = @cmp_queue.pop
-
-			$log.debug "Processing #{link_state_packet.inspect}"
+			$log.debug "Processing #{control_message_packet.inspect}"
 			payload = control_message_packet.payload
 
-			if payload.type.eql? "TRACEROUTE"
+			if control_message_packet.type.eql? "TRACEROUTE"
 				handle_traceroute_cmp control_message_packet
 			end
 		end
@@ -193,9 +204,6 @@ class MainProcessor
 	#After checking all of them it updates the routing table
 	#Then it waits until more data is added in the queue
 	def link_state_packet_processor
-
-		#pop and process all available link state packets
-		#will block until packets pushed to queue
 		while link_state_packet = @lsp_queue.pop
 			$log.debug "Processing #{link_state_packet.inspect}"
 
@@ -208,30 +216,7 @@ class MainProcessor
 			end
 
 			@routing_table_updating = true
-			#pop and process all available link state packets
-			#will block until packets pushed to queue
-			while link_state_packet = @lsp_queue.pop
-				$log.debug "Processing #{link_state_packet.inspect}"
 
-				# flood the received packet, update topology graph, and update routing table
-				@flooding_utility.check_link_state_packet(link_state_packet)
-
-				#Optimization: Process additional link state packets but without blocking
-				until @lsp_queue.empty?
-					@flooding_utility.check_link_state_packet(@lsp_queue.pop)
-				end
-
-				@routing_table_updating = true
-
-				#$log.debug "Global topology: #{@flooding_utility.global_top.graph.inspect}"
-
-				@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top, @source_hostname)
-				$log.info "Routing table updated"
-				@routing_table.print_routing if $debug
-
-				@routing_table_updating = false
-
-			end
 			#$log.debug "Global topology: #{@flooding_utility.global_top.graph.inspect}"
 
 			@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top, @source_hostname)
@@ -240,6 +225,52 @@ class MainProcessor
 
 			@routing_table_updating = false
 
+		end
+	end
+
+	#TODO handle link state packets
+	#Listens to forward_queue and forwards any new packets to next hop
+	def packet_forwarder
+		while packet = @forward_queue.pop
+
+			destination_hostname = packet.destination_name
+
+			begin
+
+				#TODO wait until routing table exists and is stable
+				#Forward to next hop
+				next_hop_route_entry = @routing_table[destination_hostname]
+
+				#TODO create mutex for routing table and maybe port_hash
+				next_hop_ip = next_hop_route_entry.next_hop.ip
+				next_hop_hostname = next_hop_route_entry.next_hop.hostname
+
+				next_hop_port = @port_hash[next_hop_hostname]
+
+				socket = TCPSocket.open(next_hop_ip, next_hop_port)
+
+				socket.puts(packet.to_json)
+
+				# Close socket in use
+				socket.close
+
+				$log.debug "Succesfully sent packet with destination: 
+				#{destination_hostname} to #{next_hop_hostname}
+				packet: #{packet.to_json.inspect}"
+			rescue Errno::ECONNREFUSED => e
+
+				#TODO handle this. Could mean link or node is down
+				#TODO test if this handles links that are down.
+				$log.warn "Conection refused to #{neighbor_ip}:#{@port} will \
+				append to end of forward queue and try again later retry"
+
+				#Push to end of queue to try again later
+				@forward_queue.push packet #Note this messes up the order 
+
+				sleep 1 if $debug
+
+				
+			end
 		end
 	end
 
@@ -268,7 +299,8 @@ class MainProcessor
 					if packet_type.eql? "LSP"
 						@lsp_queue << packet #add packet to Link State Queue
 					else
-						@cmp_queue << packet#add packet to Control Message Queue
+						@cmp_queue << packet #add packet to Control Message Queue
+						$log.debug "appended #{packet} to cmp_queue"
 					end
 
 				end
@@ -314,7 +346,7 @@ class MainProcessor
 
 		if (packet_changed)
 			@routing_table_updating = true
-			@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top.graph, source_hostname)
+			@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top.graph, @source_hostname)
 			@routing_table_updating = false
 		end
 	end
@@ -354,7 +386,8 @@ class MainProcessor
 		threads = [ Thread.new { update_time }, 
 					Thread.new { control_message_listener }, 
 					Thread.new { packet_listener },
-					Thread.new { link_state_packet_processor } ]
+					Thread.new { link_state_packet_processor },
+					Thread.new { packet_forwarder } ]
 
 		loop {
 
@@ -379,6 +412,28 @@ class MainProcessor
 		}
 
 	end
+
+  # ---------------------------------------
+  # Utility method used to parse out the 
+  # ports that each of the nodes need to 
+  # connect to
+  # ---------------------------------------
+  def parse_port(file)
+
+    # Initialize port hash to store the node names 
+    # and the correct ports to run off of
+    port_hash = Hash.new
+    
+    File.open(file, "r").readlines.each do |line|
+      nodes = line.split('=')
+
+      port_hash[nodes.first] = nodes[1].chomp
+    end
+
+    $log.debug("Created port hash #{port_hash.inspect}")
+
+    port_hash
+  end 
 
 end
 

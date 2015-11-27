@@ -5,7 +5,7 @@ require_relative 'packet.rb'
 #TODO How will we fragmentation
 
 class ControlMessagePacket < Packet
-	attr_accessor :source_name, :source_ip,:destination_name, :destination_ip, :seq_numb, :payload
+	attr_accessor :source_name, :source_ip,:destination_name, :destination_ip, :seq_numb, :payload, :type
 
 	# ---------------------------------------
 	# Initialize the fields of the Control Message
