@@ -14,7 +14,7 @@ class ControlMessagePacket < Packet
 	# ---------------------------------------
 	def initialize(source_name, source_ip, destination_name, destination_ip, seq_numb, type, payload)
 
-		if source_name.nil? or source_ip.nil? or seq_numb.nil? or payload.nil?
+		if source_name.nil? or source_ip.nil? or seq_numb.nil?
 			throw :invalid_argument
 		end
 
@@ -35,14 +35,17 @@ class ControlMessagePacket < Packet
 	def to_json
 		#TODO add rest of required fields
 		{ 'packet_type' => "CMP", 'source_name' => @source_name, 'source_ip' => @source_ip, 'seq_numb' => 
-			@seq_numb, 'type'=> @type 'payload' => @payload}.to_json
+			@seq_numb, 'type'=> @type, 'payload' => @payload, 'destination_name' => @destination_name,
+			"destination_ip" => @destination_ip}.to_json
 	end
 
 	#Takes a json hash and fully constructs it into a ControlMessagePacket
 	def self.from_json_hash(data)
 		#TODO add rest of required fields
-		ControlMessagePacket.new(data['source_name'], data['source_ip'], 
-			data['seq_numb'].to_i, data['payload'])
+		ControlMessagePacket.new(
+			data['source_name'], data['source_ip'],
+			data['destination_name'], data['destination_ip'],
+			data['seq_numb'].to_i, data['type'], data['payload'])
 
 	end
 

@@ -2,7 +2,9 @@ require 'time'
 require 'socket'
 require 'thread'
 
+require_relative 'packet.rb'
 require_relative 'link_state_packet.rb'
+require_relative 'control_msg_packet.rb'
 require_relative 'graph_builder.rb'
 require_relative 'flooding_utility.rb'
 require_relative 'dijkstra_executor.rb'
@@ -55,7 +57,7 @@ class MainProcessor
 
 		File.open(weights_filepath).each do |line|
 			if line =~ /#{node_hostname}\s*,\s*([\d\.]+)/
-				@source_ip_address = $1
+				@source_ip = $1
 				break
 			end
 		end
@@ -94,7 +96,7 @@ class MainProcessor
 		#A queue containing control message packets
 		@cmp_queue = Queue.new
 
-		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip_address, @nodes_config_filepath, @weights_config_filepath)
+		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip, @nodes_config_filepath, @weights_config_filepath)
 
 		@routing_table = nil
 		@routing_table_updating = false
@@ -120,15 +122,23 @@ class MainProcessor
 	end
 
 	def perform_traceroute(destination_name)
+
+		if destination_name.nil?
+			throw :invalid_argument
+		end
+
 		payload = Hash.new
 		payload['traceroute_data'] = "" #empty string for nodes to append to
 
 		control_message_packet = ControlMessagePacket.new(@source_hostname,
 				@source_ip, destination_name, nil, 0, "TRACEROUTE", payload)
+
+		#Send to node
+		forward_queue << control_message_packet
 	end
 
 	#Handle a traceroute message 
-	def handle_traceroute_cmp
+	def handle_traceroute_cmp(control_message_packet)
 		#A traceroute message is completed when payload["complete"] is true
 		#and payload["original_source_name"] == @source_hostname
 		#In that case payload["traceroute_data"] will have our data
@@ -137,9 +147,10 @@ class MainProcessor
 
 		if payload["complete"]
 			if payload["original_source_name"].eql? @source_hostname
-				#TODO
+				#TODO Finally at source handle correctly
+				$log.debug "Traceroute arrived back #{payload.inspect}"
 			else
-				#Not complete
+				#Data is complete. It is just heading back to original source
 				forward_queue << control_message_packet
 			end
 		else
@@ -173,16 +184,7 @@ class MainProcessor
 			payload = control_message_packet.payload
 
 			if payload.type.eql? "TRACEROUTE"
-			#Arrived at destination
-			if control_message_packet.destination_name == @source_hostname
-			else
-				#Trace route is complete don't add any
-				if payload["complete"]
-
-				else
-
-				end
-			end
+				handle_traceroute_cmp control_message_packet
 			end
 		end
 	end
@@ -291,7 +293,7 @@ class MainProcessor
 		File.open(filename, "w+") { |file|
 			if @routing_table != nil
 				@routing_table.each { |destination, info|
-					file.puts("#{@source_ip_address},#{info.destination.ip},#{info.next_hop.ip},#{info.distance}")
+					file.puts("#{@source_ip},#{info.destination.ip},#{info.next_hop.ip},#{info.distance}")
 				}
 			end
 
@@ -361,7 +363,8 @@ class MainProcessor
 				# if stdin contains some text then parse it
 				if inputted_command != nil && inputted_command != ""
 					if /#{DUMPTABLE}/.match(inputted_command)
-						Thread.new { perform_dumptable($1) }
+						filename = $1 #passing in $1 directly passes nil for some reason
+						Thread.new { perform_dumptable(filename) }
 					elsif /#{FORCEUPDATE}/.match(inputted_command)
 						Thread.new { perform_forceupdate }
 					elsif /#{CHECKSTABLE}/.match(inputted_command)
@@ -369,7 +372,8 @@ class MainProcessor
 					elsif /#{SHUTDOWN}/.match(inputted_command)
 						Thread.new { perform_shutdown }
 					elsif /#{TRACEROUTE}/.match(inputted_command)
-						Thread.new { perform_traceroute($1) }
+						hostname = $1
+						Thread.new { perform_traceroute(hostname) }
 					end
 				end
 		}
