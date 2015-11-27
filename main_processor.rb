@@ -121,15 +121,14 @@ class MainProcessor
 	# be listening for other messages coming through.
 	# ---------------------------------------------------------------------
 	def control_message_listener
-		#loop {
-		#	Thread.start(@control_message_socket.accept) do |otherNode|
-				# handle the control messages and perform operations
-				# this isn't needed until Part 2
-		#	end
-		#}
+		#pop and process all available link state packets
+		#will block until packets pushed to queue
+		while link_state_packet = @lsp_queue.pop
+			$log.debug "Processing #{link_state_packet.inspect}"
+		end
 	end
 
-	#Pops link state packets and calls check_link_state_packet on each of them
+	#Pops  packets and calls check_link_state_packet on each of them
 	#After checking all of them it updates the routing table
 	#Then it waits until more data is added in the queue
 	def link_state_packet_processor
@@ -149,7 +148,7 @@ class MainProcessor
 
 			@routing_table_updating = true
 
-			$log.debug "Global topology: #{@flooding_utility.global_top.graph.inspect}"
+			#$log.debug "Global topology: #{@flooding_utility.global_top.graph.inspect}"
 
 			@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top, @source_hostname)
 			$log.info "Routing table updated"
@@ -161,25 +160,33 @@ class MainProcessor
 	end
 
 	# ---------------------------------------------------------------------
-	# Listens for incoming connections to facilitate link
-	# state packet transmission. Once a link state packet has arrived,
-	# a new thread is created to handle the operations. Operations
-	# include the continuation of the packet being flooded, construction
-	# of topological graph, and updates to the routing table.
+	# Listens for incoming connections to facilitate packet queueing.
+	# Once a packet has arrived, a new thread is created to handle the client.
+	# The packets is parsed and the type of packet is checked.
+	# If the packet is a Link State Packet it is added to the Link State Packet
+	# Queue. If the packet is a Control Message Packet then it is added to the
+	# Control Message Packet Queue.
 	# ---------------------------------------------------------------------
-	def link_state_packet_listener
+	def packet_listener
 		loop {
 
 			Thread.start(@link_state_socket.accept) do |otherNode|
 				received_json = ""
 
-				# receive the json info from the node
-				#convert to LinkStatePacket
-				#Push to lsp_queue
+				#receive the json data from the node
+				#parse packet and type
+				#push packets to respective queue types
 				while lsp_str = otherNode.gets
-					$log.debug "Received data #{lsp_str}"
-					link_state_packet = LinkStatePacket.from_json(lsp_str)
-					@lsp_queue << link_state_packet
+					#parse packet and get packet type
+					packet, packet_type = Packet.from_json(lsp_str)
+					$log.debug "Received #{packet_type}: #{lsp_str}"
+
+					if packet_type.eql? "LSP"
+						@lsp_queue << packet #add packet to Link State Queue
+					else
+						@cmp_queue << packet#add packet to Control Message Queue
+					end
+
 				end
 
 	
@@ -259,7 +266,7 @@ class MainProcessor
 		Thread.abort_on_exception = true
 		threads = [ Thread.new { update_time }, 
 					Thread.new { control_message_listener }, 
-					Thread.new { link_state_packet_listener },
+					Thread.new { packet_listener },
 					Thread.new { link_state_packet_processor } ]
 
 		# running infinite loop and reading user commands
