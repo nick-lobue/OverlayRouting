@@ -9,6 +9,7 @@ require_relative 'graph_builder.rb'
 require_relative 'flooding_utility.rb'
 require_relative 'dijkstra_executor.rb'
 require_relative 'performer.rb'
+require_relative 'handler.rb'
 
 $log = Logger.new(STDOUT)
 $log.level = Logger::DEBUG
@@ -19,6 +20,8 @@ $debug = true #TODO set to false on submission
 # all aspects of the program.
 # --------------------------------------------
 class MainProcessor
+
+	attr_accessor :source_hostname, :source_ip, :source_port, :node_time
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
@@ -127,76 +130,6 @@ class MainProcessor
 		}
 	end
 
-	def perform_traceroute(destination_name)
-
-		if destination_name.nil?
-			throw :invalid_argument
-		end
-
-		#TODO handle timeout 
-
-		payload = Hash.new
-
-		#Fill in initial trace route hopcount of 0 the hostname and time to get to node is 0
-		payload['data'] = "0 #{@source_hostname} 0\n"
-
-		payload["original_source_name"] = @source_hostname
-		payload["original_source_ip"] = @source_ip
-
-		control_message_packet = ControlMessagePacket.new(@source_hostname,
-				@source_ip, destination_name, nil, 0, "TRACEROUTE", payload, @node_time)
-
-		#Send to node
-		@forward_queue << control_message_packet
-	end
-
-	#Handle a traceroute message 
-	def handle_traceroute_cmp(control_message_packet)
-		#A traceroute message is completed when payload["complete"] is true
-		#and payload["original_source_name"] == @source_hostname
-		#In that case payload["traceroute_data"] will have our data
-
-		#TODO handle timeouts
-
-		payload = control_message_packet.payload
-
-		if payload["complete"]
-			if payload["original_source_name"].eql? @source_hostname
-				#TODO Finally at source handle correctly
-				$log.debug "Traceroute arrived back #{payload.inspect}"
-				puts payload["data"]
-			else
-				#Else data is complete. It is just heading back to original source
-				@forward_queue << control_message_packet
-			end
-			
-		else
-			#Get difference between last hop time and current time
-			hop_time = @node_time - payload["last_hop_time"].to_f
-
-			#Update hop time on payload
-			payload["last_hop_time"] = @node_time
-
-			#Update hopcount
-			payload["HOPCOUNT"] = payload["HOPCOUNT"].to_i + 1
-
-			payload["data"] += "#{payload["HOPCOUNT"]} #{@source_hostname} #{payload["last_hop_time"]}\n"
-
-			#Trace Route has reached destination. Send a new packet to original
-			#source with the same data but marked as completed
-			if control_message_packet.destination_name.eql? @source_hostname
-				payload["complete"] = true
-				control_message_packet = ControlMessagePacket.new(@source_hostname,
-				@source_ip, control_message_packet.source_name,
-				control_message_packet.source_ip, 0, "TRACEROUTE", payload, @node_time)
-
-			end
-			control_message_packet.payload = payload
-			@forward_queue << control_message_packet
-		end
-
-
-	end
 
 	# ---------------------------------------------------------------------
 	# Listens for incoming connections in order to handle control
@@ -206,16 +139,20 @@ class MainProcessor
 	# ---------------------------------------------------------------------
 	def control_message_listener
 
-		$log.debug "Started control_message_listener"
 		#pop and process all available control message packets
 		#will block until packets pushed to queue
 		while control_message_packet = @cmp_queue.pop
-			$log.debug "Processing #{control_message_packet.inspect}"
-			payload = control_message_packet.payload
 
-			if control_message_packet.type.eql? "TRACEROUTE"
-				handle_traceroute_cmp control_message_packet
+			#Note to Nick and Tyler: If you need to add more arguments just pass them in
+			#the optional_args hash. Then retrive it from the hash.
+			#Example self.handle(main_processor, control_message_packet, {'time'=>'time', 'timeout'=>15}
+			#Similar concept with getting return values. optional return is also a hash.
+			packets_to_forward, optional_return = ControlMessageHandler.handle(self, control_message_packet, {})
+
+			unless packets_to_forward.nil?
+				@forward_queue << packets_to_forward
 			end
+
 		end
 	end
 
@@ -330,68 +267,6 @@ class MainProcessor
 		}
 	end
 
-	# --------------------------------------------------------------
-	# Perform the DUMPTABLE hook by going through the routing
-	# table's entries and writing the source host ip, destination
-	# ip, next hop, and total distance from source to destination
-	# to a .csv file.
-	# @param filename Specifies the name of the file to create.
-	# --------------------------------------------------------------
-	def perform_dumptable(filename)
-		filename = filename + ".csv" if filename !~ /.csv/
-
-		# creating the file and writing routing table information
-		File.open(filename, "w+") { |file|
-			if @routing_table != nil
-				@routing_table.each { |destination, info|
-					file.puts("#{@source_ip},#{info.destination.ip},#{info.next_hop.ip},#{info.distance}")
-				}
-			end
-
-			file.close
-		}
-	end
-
-	# -----------------------------------------------------------------
-	# Performs the FORCEUPDATE command by calling the flooding
-	# utility to determine if the current node's local topology
-	# has changed. If it changed, the flooding utility sends the
-	# new link state packet out and reconstruct the global topology
-	# graph. Then, the routing table is updated. If the link state
-	# packet didn't change this function will do nothing.
-	# -----------------------------------------------------------------
-	def perform_forceupdate
-		packet_changed = @flooding_utility.has_changed(@weights_config_filepath)
-
-		if (packet_changed)
-			@routing_table_updating = true
-			@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top.graph, @source_hostname)
-			@routing_table_updating = false
-		end
-	end
-
-	# ----------------------------------------------------------------
-	# Performs the CHECKSTABLE command by determining if the
-	# routing table is currently being updated. If it is, 'no' is
-	# printed specifying that the node is unstable. Otherwise,
-	# 'yes' is printed showing that the node is stable.
-	# ----------------------------------------------------------------
-	def perform_checkstable
-		if (@routing_table_updating)
-			$stdout.puts("no")
-		else
-			$stdout.puts("yes")
-		end
-	end
-
-	# ----------------------------------------------------------------
-	# Performs the SHUTDOWN command...
-	# ----------------------------------------------------------------
-	def perform_shutdown
-		# shutdown all open sockets
-		# print current buffer information
-	end
-
 
 
 
@@ -416,13 +291,13 @@ class MainProcessor
 				if inputted_command != nil && inputted_command != ""
 					if /#{DUMPTABLE}/.match(inputted_command)
 						filename = $1 #passing in $1 directly passes nil for some reason
-						Thread.new { perform_dumptable(filename) }
+						Thread.new { Performer.perform_dumptable(filename) }
 					elsif /#{FORCEUPDATE}/.match(inputted_command)
-						Thread.new { perform_forceupdate }
+						Thread.new { Performer.perform_forceupdate }
 					elsif /#{CHECKSTABLE}/.match(inputted_command)
-						Thread.new { perform_checkstable }
+						Thread.new { Performer.perform_checkstable }
 					elsif /#{SHUTDOWN}/.match(inputted_command)
-						Thread.new { perform_shutdown }
+						Thread.new { Performer.perform_shutdown }
 					elsif /#{TRACEROUTE}/.match(inputted_command)
 						hostname = $1
 						Thread.new {
