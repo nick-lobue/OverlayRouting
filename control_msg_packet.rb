@@ -2,38 +2,30 @@ require 'json'
 require_relative 'packet.rb'
 
 #TODO discuss what fields to use in Control Message
+#TODO How will we fragmentation
 
 class ControlMessagePacket < Packet
-	attr_accessor :source_name, :source_ip, :seq_numb
+	attr_accessor :source_name, :source_ip,:destination_name, :destination_ip, :seq_numb, :payload
 
 	# ---------------------------------------
-	# Initialize the fields of the link state
-	# packet and create a new hash to store 
-	# the neighbors of the node
+	# Initialize the fields of the Control Message
+	# packet
+	# TODO do we need the ip? Or we could make it optional
 	# ---------------------------------------
-	def initialize(source_name, source_ip, seq_numb)
+	def initialize(source_name, source_ip, destination_name, destination_ip, seq_numb, type, payload)
 
-		if source_name.nil? or source_ip.nil? or seq_numb.nil?
+		if source_name.nil? or source_ip.nil? or seq_numb.nil? or payload.nil?
 			throw :invalid_argument
 		end
 
-		if neighbors.class.name != "Hash" and not neighbors.nil?
-			$log.debug "neighbors type: #{neighbors.class}"
-			throw :invalid_argument_wrong_type
-		end
-
+		@destination_name = destination_name
+		@destination_ip = destination_ip
 		@source_name = source_name
 		@source_ip = source_ip
 		@seq_numb = seq_numb
+		@payload = payload
+		@type = type
 
-		# If the neighbors parameter is nil then 
-		# initialize the link state packet to have
-		# an empty hash
-		if neighbors.nil?
-			@neighbors = Hash.new
-		else
-			@neighbors = neighbors
-		end
 	end
 
 	# -------------------------------------
@@ -41,28 +33,16 @@ class ControlMessagePacket < Packet
 	# object for parsing
 	# -------------------------------------
 	def to_json
-		{ 'packet_type' => "LSP", 'source_name' => @source_name, 'source_ip' => @source_ip, 'seq_numb' => 
-			@seq_numb}.to_json
+		#TODO add rest of required fields
+		{ 'packet_type' => "CMP", 'source_name' => @source_name, 'source_ip' => @source_ip, 'seq_numb' => 
+			@seq_numb, 'type'=> @type 'payload' => @payload}.to_json
 	end
 
-
-	# ------------------------------------
-	# A static method that will be used to 
-	# convert a link state packet json back
-	# into a link state object
-	# -------------------------------------
+	#Takes a json hash and fully constructs it into a ControlMessagePacket
 	def self.from_json_hash(data)
-
-		#keys are arrays and need to be parsed separetly
-		unless data['neighbors'].nil?
-			parsed_neighbors = Hash.new
-			data['neighbors'].each_pair { |key, pair|
-				parsed_neighbors[JSON.parse(key)] = pair
-			}
-			lsp.neighbors = parsed_neighbors
-		end
-
-		lsp
+		#TODO add rest of required fields
+		ControlMessagePacket.new(data['source_name'], data['source_ip'], 
+			data['seq_numb'].to_i, data['payload'])
 
 	end
 

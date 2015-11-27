@@ -22,6 +22,8 @@ class MainProcessor
 	FORCEUPDATE = "^\s*FORCEUPDATE\s*$"
 	CHECKSTABLE = "^\s*CHECKSTABLE\s*$"
 	SHUTDOWN = "^\s*SHUTDOWN\s*$"
+
+	TRACEROUTE = "^TRACEROUTE\s+(.+)$"
 	
 
 	# ------------------------------------------------------
@@ -89,6 +91,9 @@ class MainProcessor
 		#A queue containing link state packets
 		@lsp_queue = Queue.new
 
+		#A queue containing control message packets
+		@cmp_queue = Queue.new
+
 		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip_address, @nodes_config_filepath, @weights_config_filepath)
 
 		@routing_table = nil
@@ -114,6 +119,45 @@ class MainProcessor
 		}
 	end
 
+	def perform_traceroute(destination_name)
+		payload = Hash.new
+		payload['traceroute_data'] = "" #empty string for nodes to append to
+
+		control_message_packet = ControlMessagePacket.new(@source_hostname,
+				@source_ip, destination_name, nil, 0, "TRACEROUTE", payload)
+	end
+
+	#Handle a traceroute message 
+	def handle_traceroute_cmp
+		#A traceroute message is completed when payload["complete"] is true
+		#and payload["original_source_name"] == @source_hostname
+		#In that case payload["traceroute_data"] will have our data
+
+		payload = control_message_packet.payload
+
+		if payload["complete"]
+			if payload["original_source_name"].eql? @source_hostname
+				#TODO
+			else
+				#Not complete
+				forward_queue << control_message_packet
+			end
+		else
+			payload["data"] += "TODO append data for #{source_hostname}\n"
+
+			#Trace Route has reached destination. Send a new packet to original
+			#source with the same data but marked as completed
+			if control_message_packet.destination_name.eql? @source_hostname
+				payload["complete"] = true
+				ControlMessagePacket.new(@source_hostname,
+				@source_ip, destination_name, nil, 0, "TRACEROUTE", payload)
+			end
+
+			control_message_packet.payload = payload
+		end
+
+	end
+
 	# ---------------------------------------------------------------------
 	# Listens for incoming connections in order to handle control
 	# message transmissions. Once a control message has arrived, it's
@@ -121,10 +165,25 @@ class MainProcessor
 	# be listening for other messages coming through.
 	# ---------------------------------------------------------------------
 	def control_message_listener
-		#pop and process all available link state packets
+		#pop and process all available control message packets
 		#will block until packets pushed to queue
-		while link_state_packet = @lsp_queue.pop
+		while control_message_packet = @cmp_queue.pop
+
 			$log.debug "Processing #{link_state_packet.inspect}"
+			payload = control_message_packet.payload
+
+			if payload.type.eql? "TRACEROUTE"
+			#Arrived at destination
+			if control_message_packet.destination_name == @source_hostname
+			else
+				#Trace route is complete don't add any
+				if payload["complete"]
+
+				else
+
+				end
+			end
+			end
 		end
 	end
 
@@ -147,7 +206,30 @@ class MainProcessor
 			end
 
 			@routing_table_updating = true
+			#pop and process all available link state packets
+			#will block until packets pushed to queue
+			while link_state_packet = @lsp_queue.pop
+				$log.debug "Processing #{link_state_packet.inspect}"
 
+				# flood the received packet, update topology graph, and update routing table
+				@flooding_utility.check_link_state_packet(link_state_packet)
+
+				#Optimization: Process additional link state packets but without blocking
+				until @lsp_queue.empty?
+					@flooding_utility.check_link_state_packet(@lsp_queue.pop)
+				end
+
+				@routing_table_updating = true
+
+				#$log.debug "Global topology: #{@flooding_utility.global_top.graph.inspect}"
+
+				@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top, @source_hostname)
+				$log.info "Routing table updated"
+				@routing_table.print_routing if $debug
+
+				@routing_table_updating = false
+
+			end
 			#$log.debug "Global topology: #{@flooding_utility.global_top.graph.inspect}"
 
 			@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top, @source_hostname)
@@ -257,6 +339,9 @@ class MainProcessor
 		# print current buffer information
 	end
 
+
+
+
 	# -------------------------------------------------
 	# Main processing method that creates the
 	# threads to perform the various operations that
@@ -268,9 +353,6 @@ class MainProcessor
 					Thread.new { control_message_listener }, 
 					Thread.new { packet_listener },
 					Thread.new { link_state_packet_processor } ]
-
-		# running infinite loop and reading user commands
-		unless $debug
 
 		loop {
 
@@ -286,15 +368,12 @@ class MainProcessor
 						Thread.new { perform_checkstable }
 					elsif /#{SHUTDOWN}/.match(inputted_command)
 						Thread.new { perform_shutdown }
+					elsif /#{TRACEROUTE}/.match(inputted_command)
+						Thread.new { perform_traceroute($1) }
 					end
 				end
 		}
 
-		else
-			#Need to disable reading from STDIB
-			$log.warn "In debugging mode will not accept input to STDIN"
-			loop {} #dies without this
-		end
 	end
 
 end
