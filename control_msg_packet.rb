@@ -5,14 +5,14 @@ require_relative 'packet.rb'
 #TODO How will we fragmentation
 
 class ControlMessagePacket < Packet
-	attr_accessor :source_name, :source_ip,:destination_name, :destination_ip, :seq_numb, :payload, :type
+	attr_accessor :source_name, :source_ip,:destination_name, :destination_ip, :seq_numb, :payload, :type, :time_sent
 
 	# ---------------------------------------
 	# Initialize the fields of the Control Message
 	# packet
 	# TODO do we need the ip? Or we could make it optional
 	# ---------------------------------------
-	def initialize(source_name, source_ip, destination_name, destination_ip, seq_numb, type, payload)
+	def initialize(source_name, source_ip, destination_name, destination_ip, seq_numb, type, payload, time_sent)
 
 		if source_name.nil? or source_ip.nil? or seq_numb.nil?
 			throw :invalid_argument
@@ -25,6 +25,7 @@ class ControlMessagePacket < Packet
 		@seq_numb = seq_numb
 		@payload = payload
 		@type = type
+		@time_sent = time_sent
 
 	end
 
@@ -36,7 +37,7 @@ class ControlMessagePacket < Packet
 		#TODO add rest of required fields
 		{ 'packet_type' => "CMP", 'source_name' => @source_name, 'source_ip' => @source_ip, 'seq_numb' => 
 			@seq_numb, 'type'=> @type, 'payload' => @payload, 'destination_name' => @destination_name,
-			"destination_ip" => @destination_ip}.to_json
+			"destination_ip" => @destination_ip, "time_sent" => time_sent}.to_json
 	end
 
 	#Takes a json hash and fully constructs it into a ControlMessagePacket
@@ -45,7 +46,8 @@ class ControlMessagePacket < Packet
 		ControlMessagePacket.new(
 			data['source_name'], data['source_ip'],
 			data['destination_name'], data['destination_ip'],
-			data['seq_numb'].to_i, data['type'], data['payload'])
+			data['seq_numb'].to_i, data['type'], data['payload'],
+			data['time_sent'].to_f)
 
 	end
 

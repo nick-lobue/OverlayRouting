@@ -8,6 +8,7 @@ require_relative 'control_msg_packet.rb'
 require_relative 'graph_builder.rb'
 require_relative 'flooding_utility.rb'
 require_relative 'dijkstra_executor.rb'
+require_relative 'performer.rb'
 
 $log = Logger.new(STDOUT)
 $log.level = Logger::DEBUG
@@ -80,7 +81,7 @@ class MainProcessor
 			puts "Usage: ruby main_processor.rb [config file] [source hostname]"
 		end
 
-		@node_time = Time.now
+		@node_time = Time.now.to_f
 		@config_filepath = arguments[0]
 		@source_hostname = arguments[1]
 
@@ -132,12 +133,18 @@ class MainProcessor
 			throw :invalid_argument
 		end
 
+		#TODO handle timeout 
+
 		payload = Hash.new
-		payload['traceroute_data'] = "" #empty string for nodes to append to
+
+		#Fill in initial trace route hopcount of 0 the hostname and time to get to node is 0
+		payload['data'] = "0 #{@source_hostname} 0\n"
+
 		payload["original_source_name"] = @source_hostname
 		payload["original_source_ip"] = @source_ip
+
 		control_message_packet = ControlMessagePacket.new(@source_hostname,
-				@source_ip, destination_name, nil, 0, "TRACEROUTE", payload)
+				@source_ip, destination_name, nil, 0, "TRACEROUTE", payload, @node_time)
 
 		#Send to node
 		@forward_queue << control_message_packet
@@ -149,19 +156,31 @@ class MainProcessor
 		#and payload["original_source_name"] == @source_hostname
 		#In that case payload["traceroute_data"] will have our data
 
+		#TODO handle timeouts
+
 		payload = control_message_packet.payload
 
 		if payload["complete"]
 			if payload["original_source_name"].eql? @source_hostname
 				#TODO Finally at source handle correctly
 				$log.debug "Traceroute arrived back #{payload.inspect}"
+				puts payload["data"]
 			else
 				#Else data is complete. It is just heading back to original source
 				@forward_queue << control_message_packet
 			end
 			
 		else
-			payload["traceroute_data"] += "TODO append data for #{@source_hostname}\n"
+			#Get difference between last hop time and current time
+			hop_time = @node_time - payload["last_hop_time"].to_f
+
+			#Update hop time on payload
+			payload["last_hop_time"] = @node_time
+
+			#Update hopcount
+			payload["HOPCOUNT"] = payload["HOPCOUNT"].to_i + 1
+
+			payload["data"] += "#{payload["HOPCOUNT"]} #{@source_hostname} #{payload["last_hop_time"]}\n"
 
 			#Trace Route has reached destination. Send a new packet to original
 			#source with the same data but marked as completed
@@ -169,7 +188,7 @@ class MainProcessor
 				payload["complete"] = true
 				control_message_packet = ControlMessagePacket.new(@source_hostname,
 				@source_ip, control_message_packet.source_name,
-				control_message_packet.source_ip, 0, "TRACEROUTE", payload)
+				control_message_packet.source_ip, 0, "TRACEROUTE", payload, @node_time)
 
 			end
 			control_message_packet.payload = payload
@@ -406,7 +425,12 @@ class MainProcessor
 						Thread.new { perform_shutdown }
 					elsif /#{TRACEROUTE}/.match(inputted_command)
 						hostname = $1
-						Thread.new { perform_traceroute(hostname) }
+						Thread.new {
+							packet = Performer.perform_traceroute(self, hostname)
+							unless packet.nil?
+								@forward_queue << packet
+							end
+						}
 					end
 				end
 		}
