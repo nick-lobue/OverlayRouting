@@ -35,7 +35,6 @@ class ControlMessageHandler
 
 		if payload["complete"]
 			if control_message_packet.destination_name.eql? main_processor.source_hostname
-				#TODO Finally at source handle correctly
 				$log.debug "Traceroute arrived back #{payload.inspect}"
 				puts payload["data"]
 			else
@@ -44,16 +43,17 @@ class ControlMessageHandler
 			end
 			
 		else
-			#Get difference between last hop time and current time
-			hop_time = main_processor.node_time - payload["last_hop_time"].to_f
+			#Get difference between last hop time and current time in milliseconds
+			hop_time = (main_processor.node_time * 1000).to_i - payload["last_hop_time"].to_i
+			hop_time.ceil
 
 			#Update hop time on payload
-			payload["last_hop_time"] = main_processor.node_time
+			payload["last_hop_time"] = (main_processor.node_time.to_f * 1000).ceil
 
 			#Update hopcount
 			payload["HOPCOUNT"] = payload["HOPCOUNT"].to_i + 1
 
-			payload["data"] += "#{payload["HOPCOUNT"]} #{main_processor.source_hostname} #{payload["last_hop_time"]}\n"
+			payload["data"] += "#{payload["HOPCOUNT"]} #{main_processor.source_hostname} #{hop_time}\n"
 
 			#Trace Route has reached destination. Send a new packet to original
 			#source with the same data but marked as completed
@@ -89,6 +89,20 @@ class ControlMessageHandler
 		elsif payload["complete"]
 			#TODO handle Returned FTP complete. Packet back at source to handle
 			$log.debug "TODO FTP packet arrived back #{payload.inspect}"
+
+			#Calculate seconds since initial FTP packet
+			time = main_processor.node_time.to_f - control_message_packet.time_sent
+			time = time.ceil
+
+			speed = 0
+			begin
+				speed = (payload["size"].to_i / time).floor
+			rescue Exception => e
+				throw e #TODO delete
+				#probably a 0 as time just use 0 as the speed then
+			end
+
+			puts "FTP: #{payload["file_name"]} --> #{control_message_packet.source_name} in #{time} at #{speed}"
 			return nil, {} # no packet to forward
 		else
 			begin
@@ -135,9 +149,6 @@ class ControlMessageHandler
 				return control_message_packet, {}
 
 			rescue Exception => e
-				
-				throw e #TODO delete
-
 
 				$log.debug "FTP Exception #{e.inspect}"
 				puts "FTP: ERROR: #{control_message_packet.source_name} --> #{file_path}"

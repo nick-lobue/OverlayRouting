@@ -210,18 +210,27 @@ class MainProcessor
 
 				#If hop does not exist forward back to original node
 				if next_hop_route_entry.nil?
+
 					next_hop_route_entry = @routing_table[packet.source_hostname]
-					if next_hop_route_entry.nil?
+
+					if next_hop_route_entry.nil? and packet.retries < 6
+						#Weird case source and destination can not be found
+						#from the routing table
+						#Sleep for a second and requeue packet
+						#Hopefully the routing table might display at least on them
+						#Give 5 attempts before giving up
 						Thread.new {
-							#Weird case source and destination can not be found
-							#from the routing table
-							#Sleep for a second and requeue packet
-							#Hopefully the routing table might display at least on them
 							$log.error "No next route for #{packet.source_hostname} or
 							#{packet.destination_hostname} for packet: #{packet.inspect}"
 							sleep 1
+							packet.failures = packet.failures + 1
 							@forward_queue << packet
 						}
+					elsif next_hop_route_entry.nil?
+						#TODO maybe drop packet. If we keep trying we could overload queue
+					else
+						#TODO send back to parent maybe talk to Nick and Tyler about this
+						#We could continue retrying
 					end
 				end
 
