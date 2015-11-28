@@ -30,7 +30,8 @@ class MainProcessor
 	SHUTDOWN = "^\s*SHUTDOWN\s*$"
 
 	TRACEROUTE = "^TRACEROUTE\s+(.+)$"
-	
+	FTP = "^FTP\s+(.+)\s+(.+)\s+(.+)$"
+
 
 	# ------------------------------------------------------
 	# Parses through the configuration file to
@@ -105,9 +106,11 @@ class MainProcessor
 
 		@port_hash = parse_port @nodes_config_filepath
 
+		#Create initial blank routing table
+		@routing_table = DijkstraExecutor.routing_table(GraphBuilder.new, @source_hostname)
+
 		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip, @port_hash, @weights_config_filepath)
 
-		@routing_table = nil
 		@routing_table_updating = false
 		@link_state_socket = TCPServer.open(@source_port)
 
@@ -194,8 +197,27 @@ class MainProcessor
 			begin
 
 				#TODO wait until routing table exists and is stable
-				#Forward to next hop
-				next_hop_route_entry = @routing_table[destination_hostname]
+
+				routing_table_mutex.synchronize {
+					#Forward to next hop
+					next_hop_route_entry = @routing_table[destination_hostname]
+				}
+
+				#If hop does not exist forward back to original node
+				if next_hop_route_entry.nil?
+					next_hop_route_entry = @routing_table[packet.source_hostname]
+					if next_hop_route_entry.nil?
+						Thread.new {
+							#Weird case source and destination can not be found
+							#from the routing table
+							#Sleep for a second and requeue packet
+							#Hopefully the routing table might display at least on them
+							$log.error "packet "
+							sleep 1
+							@forward_queue << packet
+						}
+					end
+				end
 
 				#TODO create mutex for routing table and maybe port_hash
 				next_hop_ip = next_hop_route_entry.next_hop.ip
@@ -302,11 +324,26 @@ class MainProcessor
 						hostname = $1
 						Thread.new {
 							packet = Performer.perform_traceroute(self, hostname)
-							unless packet.nil?
+							if packet.class.to_s.eql? "ControlMessagePacket"
 								@forward_queue << packet
+							else
+								$log.debug "Nothing to forward #{packet.class}"
 							end
 						}
-					end
+					elsif /#{FTP}/.match(inputted_command)
+						hostname = $1
+						file_name = $2
+						epath = $3
+						Thread.new {
+							packet = Performer.perform_ftp(self, hostname, file_name, epath)
+							if packet.class.to_s.eql? "ControlMessagePacket"
+								@forward_queue << packet
+							else
+								$log.debug "Nothing to forward #{packet.class}"
+							end
+						}
+					end 
+						
 				end
 		}
 

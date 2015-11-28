@@ -14,7 +14,7 @@ class ControlMessagePacket < Packet
 	# ---------------------------------------
 	def initialize(source_name, source_ip, destination_name, destination_ip, seq_numb, type, payload, time_sent)
 
-		if source_name.nil? or source_ip.nil? or seq_numb.nil?
+		if source_name.nil? or seq_numb.nil?
 			throw :invalid_argument
 		end
 

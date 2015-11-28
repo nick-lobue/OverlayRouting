@@ -1,3 +1,5 @@
+require 'base64'
+
 require_relative 'control_msg_packet.rb'
 
 #Handles Control Message Packets (CMPs) from the CMP queue
@@ -13,6 +15,8 @@ class ControlMessageHandler
 
 		if cmp_type.eql? "TRACEROUTE"
 			self.handle_traceroute_cmp(main_processor, control_message_packet, optional_args)
+		elsif cmp_type.eql? "FTP"
+			self.handle_ftp_cmp(main_processor, control_message_packet, optional_args)
 		else
 			$log.warn "Control Message Type: #{cmp_type} not handled"
 		end
@@ -30,7 +34,7 @@ class ControlMessageHandler
 		payload = control_message_packet.payload
 
 		if payload["complete"]
-			if payload["original_source_name"].eql? main_processor.source_hostname
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
 				#TODO Finally at source handle correctly
 				$log.debug "Traceroute arrived back #{payload.inspect}"
 				puts payload["data"]
@@ -66,5 +70,91 @@ class ControlMessageHandler
 		
 		end
 
+	end
+
+	#Handle a ftp message 
+	def self.handle_ftp_cmp(main_processor, control_message_packet, optional_args)
+		#TODO handle fragmented packets later
+		#TODO handle partial data received
+
+		payload = control_message_packet.payload
+
+		unless control_message_packet.destination_name.eql? main_processor.source_hostname
+			#packet is not for this node and we have nothing to add. Just forward it along.
+			return control_message_packet, {}
+		end
+
+		if payload["failure"]
+			puts "FTP: ERROR: #{payload["file_name"]} --> #{control_message_packet.source_name} INTERRUPTED AFTER #{payload["bytes_written"]}"
+		elsif payload["complete"]
+			#TODO handle Returned FTP complete. Packet back at source to handle
+			$log.debug "TODO FTP packet arrived back #{payload.inspect}"
+			return nil, {} # no packet to forward
+		else
+			begin
+				file_path = payload["FPATH"] + '/' + payload["file_name"]
+
+				file_exists = File.exists? file_path
+
+				begin
+					file = File.open(file_path, "w+b:ASCII-8BIT")
+					file.print Base64.decode64(payload["data"])
+				rescue Exception => e
+					#if file existed before attempted write don't delete
+					unless file_exists
+						File.delete file_path
+						$log.info "deleted #{file_path} since FTP failed"
+					end
+					throw e
+				end
+
+				if file
+					bytes_written = file.size
+				else
+					bytes_written = 0
+				end
+
+				file.close
+
+				unless bytes_written.eql? payload["size"]
+					#TODO I don't think this can happen when we do fragmentation
+					throw "FTP size mismatch. Payload size: #{payload["size"]} != bytes_written: #{bytes_written}"
+				end
+
+				payload["complete"] = true
+				payload.delete "data" #clear data
+
+				#Create new control message packet to send back to source but preserve original node time
+				control_message_packet = ControlMessagePacket.new(control_message_packet.destination_name,
+				control_message_packet.destination_ip, control_message_packet.source_name,
+				control_message_packet.source_ip, 0, "FTP", payload, control_message_packet.time_sent)
+
+				puts "FTP: #{control_message_packet.source_name} --> #{file_path}"
+
+				control_message_packet.payload = payload
+				return control_message_packet, {}
+
+			rescue Exception => e
+				
+				throw e #TODO delete
+
+
+				$log.debug "FTP Exception #{e.inspect}"
+				puts "FTP: ERROR: #{control_message_packet.source_name} --> #{file_path}"
+
+				payload["complete"] = false
+				payload["failure"] = true
+				payload.delete "data" #clear data
+
+				payload["bytes_written"] = 0 #TODO handle partial data
+
+				#Create new control message packet to send back to source but preserve original node time
+				control_message_packet = ControlMessagePacket.new(control_message_packet.destination_name,
+				control_message_packet.destination_ip, control_message_packet.source_name,
+				control_message_packet.source_ip, 0, "FTP", payload, control_message_packet.time_sent)
+
+				return control_message_packet, {}
+			end
+		end
 	end
 end
