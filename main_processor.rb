@@ -107,10 +107,11 @@ class MainProcessor
 		@port_hash = parse_port @nodes_config_filepath
 
 		#Create initial blank routing table
-		@routing_table = DijkstraExecutor.routing_table(GraphBuilder.new, @source_hostname)
+		@routing_table = RoutingTable.blank_routing_table(@source_hostname, @source_ip)
 
 		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip, @port_hash, @weights_config_filepath)
 
+		@routing_table_mutex = Mutex.new
 		@routing_table_updating = false
 		@link_state_socket = TCPServer.open(@source_port)
 
@@ -177,8 +178,12 @@ class MainProcessor
 			@routing_table_updating = true
 
 			#$log.debug "Global topology: #{@flooding_utility.global_top.graph.inspect}"
+			updated_routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top, @source_hostname)
 
-			@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top, @source_hostname)
+			@routing_table_mutex.synchronize {
+				@routing_table = updated_routing_table
+			}
+
 			$log.info "Routing table updated"
 			@routing_table.print_routing if $debug
 
@@ -196,9 +201,9 @@ class MainProcessor
 
 			begin
 
-				#TODO wait until routing table exists and is stable
-
-				routing_table_mutex.synchronize {
+				#TODO should I wait until the routing table is stable to forward packet?
+				next_hop_route_entry = nil
+				@routing_table_mutex.synchronize {
 					#Forward to next hop
 					next_hop_route_entry = @routing_table[destination_hostname]
 				}
@@ -212,7 +217,8 @@ class MainProcessor
 							#from the routing table
 							#Sleep for a second and requeue packet
 							#Hopefully the routing table might display at least on them
-							$log.error "packet "
+							$log.error "No next route for #{packet.source_hostname} or
+							#{packet.destination_hostname} for packet: #{packet.inspect}"
 							sleep 1
 							@forward_queue << packet
 						}
