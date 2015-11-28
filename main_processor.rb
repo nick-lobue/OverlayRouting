@@ -9,7 +9,7 @@ require_relative 'graph_builder.rb'
 require_relative 'flooding_utility.rb'
 require_relative 'dijkstra_executor.rb'
 require_relative 'performer.rb'
-require_relative 'handler.rb'
+require_relative 'csp_handler.rb'
 
 $log = Logger.new(STDOUT)
 $log.level = Logger::DEBUG
