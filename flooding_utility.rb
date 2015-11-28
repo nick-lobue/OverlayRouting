@@ -181,7 +181,7 @@ class FloodingUtil
     
     File.open(config_file, "r").readlines.each do |line|
 
-      $log.info("config line #{line}")
+      #$log.info("config line #{line}")
 
       nodes = line.split(',')
 

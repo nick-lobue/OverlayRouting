@@ -1,6 +1,7 @@
 require_relative 'control_msg_packet.rb'
 
-#Handles Control Message Packets
+#Handles Control Message Packets (CMPs) from the CMP queue
+#Functions might return packets to add to forward_queue
 class ControlMessageHandler
 
 

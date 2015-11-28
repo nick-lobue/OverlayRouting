@@ -1,3 +1,4 @@
+#Handles commands from the user e.g. TRACEROUTE, CHECKSTABLE, PING 
 class Performer
 
 
@@ -23,7 +24,7 @@ class Performer
 				main_processor.node_time)
 
 		control_message_packet 
-	end
+	end 
 
 
 
