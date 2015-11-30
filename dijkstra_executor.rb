@@ -79,6 +79,12 @@ class RoutingTable < Hash
 		@source = source
 	end
 
+	def self.blank_routing_table(source_name, source_ip)
+		#Prepare routing table with only routing from source to source
+		source_routing_node = RouteNode.new source_ip, source_name
+		RoutingTable.new source_routing_node 
+	end
+
 	def set_source(source)
 		@source = source
 	end
