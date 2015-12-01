@@ -227,10 +227,18 @@ class MainProcessor
 							@forward_queue << packet
 						}
 					elsif next_hop_route_entry.nil?
-						#TODO maybe drop packet. If we keep trying we could overload queue
+	
 					else
 						#TODO send back to parent maybe talk to Nick and Tyler about this
 						#We could continue retrying
+						#TODO maybe
+						Thread.new {
+							$log.error "No next route for #{packet.source_hostname} or
+							#{packet.destination_hostname} for packet: #{packet.inspect}"
+							sleep 1
+							packet.failures = packet.failures + 1
+							@forward_queue << packet
+						}
 					end
 				end
 
@@ -322,46 +330,44 @@ class MainProcessor
 
 		loop {
 
-				inputted_command = STDIN.gets
+			inputted_command = STDIN.gets
 
-				# if stdin contains some text then parse it
-				if inputted_command != nil && inputted_command != ""
-					if /#{DUMPTABLE}/.match(inputted_command)
-						filename = $1 #passing in $1 directly passes nil for some reason
-						Thread.new { Performer.perform_dumptable(filename) }
-					elsif /#{FORCEUPDATE}/.match(inputted_command)
-						Thread.new { Performer.perform_forceupdate }
-					elsif /#{CHECKSTABLE}/.match(inputted_command)
-						Thread.new { Performer.perform_checkstable }
-					elsif /#{SHUTDOWN}/.match(inputted_command)
-						Thread.new { Performer.perform_shutdown }
-					elsif /#{TRACEROUTE}/.match(inputted_command)
-						hostname = $1
-						Thread.new {
-							packet = Performer.perform_traceroute(self, hostname)
-							if packet.class.to_s.eql? "ControlMessagePacket"
-								@forward_queue << packet
-							else
-								$log.debug "Nothing to forward #{packet.class}"
-							end
-						}
-					elsif /#{FTP}/.match(inputted_command)
-						hostname = $1
-						file_name = $2
-						epath = $3
-						Thread.new {
-							packet = Performer.perform_ftp(self, hostname, file_name, epath)
-							if packet.class.to_s.eql? "ControlMessagePacket"
-								@forward_queue << packet
-							else
-								$log.debug "Nothing to forward #{packet.class}"
-							end
-						}
-					end 
-						
+			# if stdin contains some text then parse it
+			if inputted_command != nil && inputted_command != ""
+				if /#{DUMPTABLE}/.match(inputted_command)
+					filename = $1 #passing in $1 directly passes nil for some reason
+					Thread.new { Performer.perform_dumptable(filename) }
+				elsif /#{FORCEUPDATE}/.match(inputted_command)
+					Thread.new { Performer.perform_forceupdate }
+				elsif /#{CHECKSTABLE}/.match(inputted_command)
+					Thread.new { Performer.perform_checkstable }
+				elsif /#{SHUTDOWN}/.match(inputted_command)
+					Thread.new { Performer.perform_shutdown }
+				elsif /#{TRACEROUTE}/.match(inputted_command)
+					hostname = $1
+					Thread.new {
+						packet = Performer.perform_traceroute(self, hostname)
+						if packet.class.to_s.eql? "ControlMessagePacket"
+							@forward_queue << packet
+						else
+							$log.debug "Nothing to forward #{packet.class}"
+						end
+					}
+				elsif /#{FTP}/.match(inputted_command)
+					hostname = $1
+					file_name = $2
+					epath = $3
+					Thread.new {
+						packet = Performer.perform_ftp(self, hostname, file_name, epath)
+						if packet.class.to_s.eql? "ControlMessagePacket"
+							@forward_queue << packet
+						else
+							$log.debug "Nothing to forward #{packet.class}"
+						end
+					}
 				end
+			end
 		}
-
 	end
 
   # ---------------------------------------
