@@ -55,7 +55,27 @@ class Performer
 				main_processor.node_time)
 
 		control_message_packet 
-	end 
+	end
+
+	# ------------------------------------------------------------
+	# Constructs the initial packet that'll be sent to 
+	# the given destination hostname with the provided message.
+	# ------------------------------------------------------------
+	def self.perform_send_message(main_processor, destination_name, message)
+		if main_processor.nil? or destination_name.nil? or message.nil?
+			throw :invalid_argument
+		end
+
+		# add message data into the payload and message size
+		payload = Hash.new
+		payload["message"] = message
+		payload["size"] = message.size
+
+		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+				main_processor.source_ip, destination_name, nil, 0, "SND_MSG", payload, main_processor.node_time)
+
+		control_message_packet
+	end
 
 	# --------------------------------------------------------------
 	# Perform the DUMPTABLE hook by going through the routing
