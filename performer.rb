@@ -57,12 +57,12 @@ class Performer
 		control_message_packet 
 	end 
 
-	# --------------------------------------------------------------
-	# Return the control message packet to be forwarded to the 
+	# -------------------------------------------------------------------
+	# Return the initial control message packet to be forwarded to the 
 	# destination included with a ping command
-	# --------------------------------------------------------------
+	# -------------------------------------------------------------------
 	def self.perform_ping(main_processor, destination_name, seq_id, unique_id)
-		if destination_name.nil? or num_pings.nil? or delay.nil?
+		if destination_name.nil? or seq_id.nil? or unique_id.nil?
 			throw :invalid_argument
 		end
 

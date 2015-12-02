@@ -1,6 +1,7 @@
 require 'time'
 require 'socket'
 require 'thread'
+require 'securerandom'
 
 require_relative 'packet.rb'
 require_relative 'link_state_packet.rb'
@@ -31,6 +32,7 @@ class MainProcessor
 
 	TRACEROUTE = "^TRACEROUTE\s+(.+)$"
 	FTP = "^FTP\s+(.+)\s+(.+)\s+(.+)$"
+	PING = "^PING\s+(.+)\s+([0-9]+)\s+([0-9 | \.]+)$"
 
 
 	# ------------------------------------------------------
@@ -150,7 +152,7 @@ class MainProcessor
 	# -------------------------------------------------
 	def update_timeout_table
 		loop {
-			for @timeout_table.each do |(key, type), (n_time, notified)|
+			@timeout_table.each do |(key, type), (n_time, notified)|
 
 				# Check first if the id in the table has outlived its lifespan
 				if @node_time - n_time > @ping_timeout
@@ -399,8 +401,8 @@ class MainProcessor
 						}
 					elsif /#{PING}/.match(inputted_command)
 						dest_hostname = $1
-						num_pings =$2
-						delay = $3
+						num_pings = $2.to_i
+						delay = $3.to_f
 						Thread.new {
 							# Create the number of pings amount of pings
 							for i in 0..num_pings-1
@@ -409,8 +411,8 @@ class MainProcessor
 								# timeout table. A boolean is appended to
 								# keep track if a notification was written to 
 								# standard out or not
-								unique_id = @rand_gen(1.0..1000.0)
-								@timeout_table[['unique_id', 'PING']] = [@node_time, false]
+								unique_id = SecureRandom.hex(8)
+								@timeout_table[['#{unique_id}', 'PING']] = [@node_time, false]
 
 								# Create packet
 								packet = Performer.perform_ping(self, dest_hostname, i, unique_id)

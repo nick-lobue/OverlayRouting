@@ -171,6 +171,11 @@ class ControlMessageHandler
 		end
 	end
 
+	# ----------------------------------------------------------
+	# Reconstructs the command message packet for ping
+	# commands. Returns the changed packet if it still needs
+	# to be forwards, otherwise it returns nil.
+	# ----------------------------------------------------------
 	def self.handle_ping_cmp(main_processor, control_message_packet, optional_args)
 		
 		# Set local variable payload to access the
@@ -225,7 +230,11 @@ class ControlMessageHandler
 		end
 	end
 
-
+	# ----------------------------------------------------------
+	# Helper method used to determine if a packet has timed
+	# out or not. Does this by comparing the node's time
+	# with the packet's origin time.
+	# ----------------------------------------------------------
 	def has_timed_out(main_processor, packet_time)
 		return main_processor.node_time - packet_time > main_processor.ping_timeout 
 	end
