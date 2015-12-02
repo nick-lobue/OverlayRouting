@@ -21,7 +21,7 @@ $debug = true #TODO set to false on submission
 # --------------------------------------------
 class MainProcessor
 
-	attr_accessor :source_hostname, :source_ip, :source_port, :node_time
+	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :timeout_table, :rand_gen, :ping_timeout
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
@@ -47,6 +47,10 @@ class MainProcessor
 				@weights_config_filepath = $1
 			elsif line =~ /\s*nodes\s*=\s*(.+)\s*/
 				@nodes_config_filepath = $1
+			elsif line =~ /\s*maxPacketSize\s*=\s*(.+)\s*/
+				@max_packet_size = $1
+			elsif line =~ /\s*pingTimeout\s*=\s*(.+)\s*/
+				@ping_timeout = $1
 			end
 		end
 	end
@@ -85,9 +89,13 @@ class MainProcessor
 			puts "Usage: ruby main_processor.rb [config file] [source hostname]"
 		end
 
+		@timeout_table = Hash.new
 		@node_time = Time.now.to_f
 		@config_filepath = arguments[0]
 		@source_hostname = arguments[1]
+
+		# Seed random number generator for unique
+		@rand_gen = Random.new(1234)
 
 		$log.debug("config_filepath: #{@config_filepath} source_hostname: #{@source_hostname}")
 
@@ -131,6 +139,38 @@ class MainProcessor
 		loop {
 			@node_time += 0.001
 			sleep(0.001)
+		}
+	end
+
+	# -------------------------------------------------
+	# Constantly updates the timeout table used at each
+	# node. Will delete the specific packet entry and 
+	# print a timeout message if the message has 
+	# outlived its lifespan
+	# -------------------------------------------------
+	def update_timeout_table
+		loop {
+			for @timeout_table.each do |(key, type), (n_time, notified)|
+
+				# Check first if the id in the table has outlived its lifespan
+				if @node_time - n_time > @ping_timeout
+
+					# Check if the id in the table is more than 5 mins old.
+					# This is done to allow for a lag in clean up 
+					if @node_time - n_time > 5000
+						@timeout_table[[key, type]].delete
+					else
+						if type == 'PING' && !notified
+							notified = true
+							puts "PING ERROR: HOST UNREACHABLE"
+						else 
+						# if type == traceroute
+						end
+					end
+				end
+			end
+
+			sleep(1)
 		}
 	end
 
@@ -357,6 +397,34 @@ class MainProcessor
 								$log.debug "Nothing to forward #{packet.class}"
 							end
 						}
+					elsif /#{PING}/.match(inputted_command)
+						dest_hostname = $1
+						num_pings =$2
+						delay = $3
+						Thread.new {
+							# Create the number of pings amount of pings
+							for i in 0..num_pings-1
+
+								# Unique id for this packet to store in the
+								# timeout table. A boolean is appended to
+								# keep track if a notification was written to 
+								# standard out or not
+								unique_id = @rand_gen(1.0..1000.0)
+								@timeout_table[['unique_id', 'PING']] = [@node_time, false]
+
+								# Create packet
+								packet = Performer.perform_ping(self, dest_hostname, i, unique_id)
+
+								if packet.class.to_s.eql? "ControlMessagePacket"
+									@forward_queue << packet
+								else
+									$log.debug "Nothing to forward #{packet.class}"
+								end
+
+								# Wait the time of the delay to send out the next ping
+								sleep(delay)
+							end
+						} 
 					end 
 						
 				end

@@ -17,6 +17,8 @@ class ControlMessageHandler
 			self.handle_traceroute_cmp(main_processor, control_message_packet, optional_args)
 		elsif cmp_type.eql? "FTP"
 			self.handle_ftp_cmp(main_processor, control_message_packet, optional_args)
+		elsif cmp_type.eql? "PING"
+			self.handle_ping_cmp(main_processor, control_message_packet, optional_args)
 		else
 			$log.warn "Control Message Type: #{cmp_type} not handled"
 		end
@@ -167,5 +169,64 @@ class ControlMessageHandler
 				return control_message_packet, {}
 			end
 		end
+	end
+
+	def self.handle_ping_cmp(main_processor, control_message_packet, optional_args)
+		
+		# Set local variable payload to access the
+		# control message packet's payload quicker 
+		payload = control_message_packet.payload
+
+		# Make sure this packet has not timed out
+		# Check if we are at the correct node and if the packet has already timed
+		# out. Then check the notification variable
+		if main_processor.timeout_table.has_key?(payload['unique_id']) && has_timed_out(main_processor, control_message_packet.time_sent)
+			# Check if there has been a notification for a timeout
+			if !main_processor.timeout_table[payload['unique_id']][1]	
+				main_processor.timeout_table[payload['unique_id']][1] = true
+				puts "PING ERROR: HOST UNREACHABLE"
+			end
+
+			return nil
+		end 
+
+		unless control_message_packet.destination_name.eql? main_processor.source_hostname
+			#packet is not for this node and we have nothing to add. Just forward it along.
+			return control_message_packet, {}
+		end
+
+		# First check if the packet is complete
+		if payload["complete"]
+
+			# Then check if the packet is at its destination
+			# If it is at its destination then the packet has made its
+			# round trip.
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
+				puts "#{payload['SEQ_ID']} #{control_message_packet.source_name} #{control_message_packet.time_sent - main_processor.node_time}"
+			else
+				# Continue to travel to next node
+				return control_message_packet, {}
+			end
+
+		# Packet is at its destination but is not complete must 
+		# set complete to true and return to sender	
+		elsif control_message_packet.destination_name.eql? main_processor.source_hostname
+			payload["complete"] = true
+
+			# Create new control message to send back to source.
+			# We must also preserve the time sent to calculate the 
+			# round trip time
+			control_message_packet = ControlMessagePacket.new(control_message_packet.destination_name,
+				control_message_packet.destination_ip, control_message_packet.source_name,
+				control_message_packet.source_ip, 0, "PING", payload, control_message_packet.time_sent)
+
+			return control_message_packet, {}
+
+		end
+	end
+
+
+	def has_timed_out(main_processor, packet_time)
+		return main_processor.node_time - packet_time > main_processor.ping_timeout 
 	end
 end
