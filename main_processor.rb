@@ -31,6 +31,7 @@ class MainProcessor
 
 	TRACEROUTE = "^TRACEROUTE\s+(.+)$"
 	FTP = "^FTP\s+(.+)\s+(.+)\s+(.+)$"
+	SEND_MESSAGE = "^SND_MSG\s+(.+)\s+(.+)$"
 
 
 	# ------------------------------------------------------
@@ -304,6 +305,19 @@ class MainProcessor
 		}
 	end
 
+	# ----------------------------------------------------
+	# Sleeps for however long the update interval
+	# specifies, then updates the routing table by
+	# calling forceupdate method. This function will be
+	# called in its own thread.
+	# ----------------------------------------------------
+	def recurring_routing_table_update
+		loop {
+			sleep(@update_interval)
+			Performer.perform_forceupdate
+		}
+	end
+
 
 
 
@@ -318,7 +332,8 @@ class MainProcessor
 					Thread.new { control_message_listener }, 
 					Thread.new { packet_listener },
 					Thread.new { link_state_packet_processor },
-					Thread.new { packet_forwarder } ]
+					Thread.new { packet_forwarder },
+					Thread.new { recurring_routing_table_update } ]
 
 		loop {
 
@@ -357,8 +372,18 @@ class MainProcessor
 								$log.debug "Nothing to forward #{packet.class}"
 							end
 						}
-					end 
-						
+					elsif /#{SEND_MESSAGE}/.match(inputted_command)
+						destination = $1
+						message = $2
+						Thread.new {
+							packet = Performer.perform_send_message(self, destination, message)
+							if packet.class.to_s.eql? "ControlMessagePacket"
+								@forward_queue << packet
+							else
+								$log.debug "Nothing to forward #{packet.class}"
+							end
+						}
+					end
 				end
 		}
 
