@@ -174,19 +174,19 @@ class ControlMessageHandler
 	# -----------------------------------------------------------
 	# Reconstructs a control message packet according to the
 	# current node that it is on. Returns nil if the packet has
-	# gotten back to its origin 
+	# gotten back to its origin, otherwise it returns the
+	# changed control message packet.
+	# -----------------------------------------------------------
 	def self.handle_send_message_cmp(main_processor, control_message_packet, optional_args)
 		payload = control_message_packet.payload
 
 		if payload["complete"]
-			# if the packet has made a round trip, determine if was a success or
+			# if the packet has made a round trip, determine if it was a success or
 			# not and print the corresponding messages
 			if control_message_packet.destination_name.eql? main_processor.source_hostname
 				if payload["failure"]
 					$log.debug "SendMessage got back to the source but failed to fully send to recipient, payload: #{payload.inspect}"
 					puts "SENDMSG ERROR: #{control_message_packet.source_name} UNREACHABLE"
-				else
-
 				end
 			else
 				# hasn't gotten back to source yet, so return packet so that it'll be forwarded
@@ -201,7 +201,7 @@ class ControlMessageHandler
 					payload["failure"] = true
 				else
 					$log.debug "SendMessage got to the destination successfully, payload: #{payload.inspect}"
-					puts "SENDMSG: #{control_message_packet.source_name} −− > #{payload["message"]}"
+					puts("SENDMSG: #{control_message_packet.source_name} --> " + payload["message"])
 				end
 
 				payload["complete"] = true
