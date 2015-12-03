@@ -207,7 +207,7 @@ class ControlMessageHandler
 			# If it is at its destination then the packet has made its
 			# round trip.
 			if control_message_packet.destination_name.eql? main_processor.source_hostname
-				puts "#{payload['SEQ_ID']} #{control_message_packet.source_name} #{control_message_packet.time_sent - main_processor.node_time}"
+				puts "#{payload['SEQ_ID']} #{control_message_packet.source_name} #{main_processor.node_time - control_message_packet.time_sent}"
 			else
 				# Continue to travel to next node
 				return control_message_packet, {}
