@@ -116,7 +116,7 @@ class Performer
 
 		if (packet_changed)
 		 	main_processor.routing_table_updating = true
-			main_processor.routing_table = DijkstraExecutor.routing_table(main_processor.flooding_utility.global_top.graph, main_processor.source_hostname)
+			main_processor.routing_table = DijkstraExecutor.routing_table(main_processor.flooding_utility.global_top, main_processor.source_hostname)
 			main_processor.routing_table_updating = false
 
 			$log.debug "Finished updating node #{main_processor.source_hostname} routing table and global topology graph."

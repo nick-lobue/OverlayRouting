@@ -212,7 +212,9 @@ class MainProcessor
 				#If hop does not exist forward back to original node
 				if next_hop_route_entry.nil?
 
+                                  @routing_table_mutex.synchronize {
 					next_hop_route_entry = @routing_table[packet.source_hostname]
+                }
 
 					if next_hop_route_entry.nil? and packet.retries < 6
 						#Weird case source and destination can not be found
@@ -314,7 +316,9 @@ class MainProcessor
 	def recurring_routing_table_update
 		loop {
 			sleep(@update_interval)
+            @routing_table_mutex.synchronize {
 			Performer.perform_forceupdate(self)
+            }
 		}
 	end
 
