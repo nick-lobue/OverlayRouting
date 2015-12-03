@@ -22,7 +22,7 @@ $debug = true #TODO set to false on submission
 # --------------------------------------------
 class MainProcessor
 
-	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :timeout_table, :rand_gen, :ping_timeout
+	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :timeout_table, :ping_timeout
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
@@ -95,9 +95,6 @@ class MainProcessor
 		@node_time = Time.now.to_f
 		@config_filepath = arguments[0]
 		@source_hostname = arguments[1]
-
-		# Seed random number generator for unique
-		@rand_gen = Random.new(1234)
 
 		$log.debug("config_filepath: #{@config_filepath} source_hostname: #{@source_hostname}")
 
