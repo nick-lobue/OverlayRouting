@@ -21,7 +21,7 @@ $debug = true #TODO set to false on submission
 # --------------------------------------------
 class MainProcessor
 
-	attr_accessor :source_hostname, :source_ip, :source_port, :node_time
+	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table, :flooding_utility, :weights_config_filepath, :nodes_config_filepath, :routing_table_updating
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
@@ -31,7 +31,7 @@ class MainProcessor
 
 	TRACEROUTE = "^TRACEROUTE\s+(.+)$"
 	FTP = "^FTP\s+(.+)\s+(.+)\s+(.+)$"
-	SEND_MESSAGE = "^SND_MSG\s+(.+)\s+(.+)$"
+	SEND_MESSAGE = "^SNDMSG\s+([0-9a-zA-Z\w]+)\s+(.+)$"
 
 
 	# ------------------------------------------------------
@@ -43,7 +43,7 @@ class MainProcessor
 	def parse_config_file(config_filepath)
 		File.open(config_filepath).each do |line|
 			if line =~ /\s*updateInterval\s*=\s*(\d+)\s*/
-				@update_interval = $1
+				@update_interval = $1.to_f
 			elsif line =~ /\s*weightFile\s*=\s*(.+)\s*/
 				@weights_config_filepath = $1
 			elsif line =~ /\s*nodes\s*=\s*(.+)\s*/
@@ -314,7 +314,7 @@ class MainProcessor
 	def recurring_routing_table_update
 		loop {
 			sleep(@update_interval)
-			Performer.perform_forceupdate
+			Performer.perform_forceupdate(self)
 		}
 	end
 
@@ -343,13 +343,13 @@ class MainProcessor
 				if inputted_command != nil && inputted_command != ""
 					if /#{DUMPTABLE}/.match(inputted_command)
 						filename = $1 #passing in $1 directly passes nil for some reason
-						Thread.new { Performer.perform_dumptable(filename) }
+						Thread.new { Performer.perform_dumptable(self, filename) }
 					elsif /#{FORCEUPDATE}/.match(inputted_command)
-						Thread.new { Performer.perform_forceupdate }
+						Thread.new { Performer.perform_forceupdate(self) }
 					elsif /#{CHECKSTABLE}/.match(inputted_command)
-						Thread.new { Performer.perform_checkstable }
+						Thread.new { Performer.perform_checkstable(self) }
 					elsif /#{SHUTDOWN}/.match(inputted_command)
-						Thread.new { Performer.perform_shutdown }
+						Thread.new { Performer.perform_shutdown(self) }
 					elsif /#{TRACEROUTE}/.match(inputted_command)
 						hostname = $1
 						Thread.new {
@@ -375,6 +375,7 @@ class MainProcessor
 					elsif /#{SEND_MESSAGE}/.match(inputted_command)
 						destination = $1
 						message = $2
+
 						Thread.new {
 							packet = Performer.perform_send_message(self, destination, message)
 							if packet.class.to_s.eql? "ControlMessagePacket"
@@ -383,6 +384,8 @@ class MainProcessor
 								$log.debug "Nothing to forward #{packet.class}"
 							end
 						}
+					else
+						$log.debug "Did not match anything. Input: #{inputted_command}"
 					end
 				end
 		}
