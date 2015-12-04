@@ -317,7 +317,7 @@ class MainProcessor
 		loop {
 			sleep(@update_interval)
             @routing_table_mutex.synchronize {
-			Performer.perform_forceupdate(self)
+				Performer.perform_forceupdate(self)
             }
 		}
 	end

@@ -119,9 +119,9 @@ class Performer
 			main_processor.routing_table = DijkstraExecutor.routing_table(main_processor.flooding_utility.global_top, main_processor.source_hostname)
 			main_processor.routing_table_updating = false
 
-			$log.debug "Finished updating node #{main_processor.source_hostname} routing table and global topology graph."
+			$log.debug "Finished updating node's (#{main_processor.source_hostname}) routing table and global topology graph."
 		else
-			$log.debug "Node #{main_processor.source_hostname} did not change."
+			$log.debug "Node's (#{main_processor.source_hostname}) local topology did not change."
 		end
 	end
 
@@ -132,7 +132,7 @@ class Performer
 	# 'yes' is printed showing that the node is stable.
 	# @param main_processor Used to check if routing table is updating.
 	# -------------------------------------------------------------------
-	def perform_checkstable(main_processor)
+	def self.perform_checkstable(main_processor)
 		if (main_processor.routing_table_updating)
 			$stdout.puts("no")
 		else
@@ -143,7 +143,7 @@ class Performer
 	# ----------------------------------------------------------------
 	# Performs the SHUTDOWN command...
 	# ----------------------------------------------------------------
-	def perform_shutdown(main_processor)
+	def self.perform_shutdown(main_processor)
 		# shutdown all open sockets
 		# print current buffer information
 	end
