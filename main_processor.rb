@@ -317,6 +317,7 @@ class MainProcessor
 		loop {
 			sleep(@update_interval)
             @routing_table_mutex.synchronize {
+            	$log.debug "Attempting to perform a recurring routing table update."
 				Performer.perform_forceupdate(self)
             }
 		}
