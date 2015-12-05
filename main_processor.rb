@@ -114,7 +114,7 @@ class MainProcessor
 
 		@routing_table_mutex = Mutex.new
 		@routing_table_updating = false
-		@link_state_socket = TCPServer.open(@source_port)
+		@packet_socket = TCPServer.open(@source_port)
 
     	#flood initial link state packet
     	@flooding_utility.initial_flood
@@ -289,16 +289,16 @@ class MainProcessor
 	def packet_listener
 		loop {
 
-			Thread.start(@link_state_socket.accept) do |otherNode|
+			Thread.start(@packet_socket.accept) do |otherNode|
 				received_json = ""
 
 				#receive the json data from the node
 				#parse packet and type
 				#push packets to respective queue types
-				while lsp_str = otherNode.gets
+				while packet_str = otherNode.gets
 					#parse packet and get packet type
-					packet, packet_type = Packet.from_json(lsp_str)
-					$log.debug "Received #{packet_type}: #{lsp_str}"
+					packet, packet_type = Packet.from_json(packet_str)
+					$log.debug "Received #{packet_type}: #{packet_str}"
 
 					if packet_type.eql? "LSP"
 						@lsp_queue << packet #add packet to Link State Queue
@@ -309,7 +309,6 @@ class MainProcessor
 
 				end
 
-	
 				otherNode.close
 			end
 		}

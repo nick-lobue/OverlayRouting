@@ -36,7 +36,6 @@ class Performer
 			throw :invalid_argument
 		end
 
-
 		payload = Hash.new
 
 		#destination path
