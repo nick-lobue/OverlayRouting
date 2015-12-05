@@ -49,8 +49,8 @@ class ControlMessageHandler
 			hop_time = (main_processor.node_time * 1000).to_i - payload["last_hop_time"].to_i
 			hop_time.ceil
 
-			#Update hop time on payload
-			payload["last_hop_time"] = (main_processor.node_time.to_f * 1000).ceil
+			#Update hop time on payload in ms
+			payload["last_hop_time"] = hop_time
 
 			#Update hopcount
 			payload["HOPCOUNT"] = payload["HOPCOUNT"].to_i + 1

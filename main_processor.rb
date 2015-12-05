@@ -230,10 +230,18 @@ class MainProcessor
 							@forward_queue << packet
 						}
 					elsif next_hop_route_entry.nil?
-						#TODO maybe drop packet. If we keep trying we could overload queue
+	
 					else
 						#TODO send back to parent maybe talk to Nick and Tyler about this
 						#We could continue retrying
+						#TODO maybe
+						Thread.new {
+							$log.error "No next route for #{packet.source_hostname} or
+							#{packet.destination_hostname} for packet: #{packet.inspect}"
+							sleep 1
+							packet.failures = packet.failures + 1
+							@forward_queue << packet
+						}
 					end
 				end
 
@@ -342,7 +350,7 @@ class MainProcessor
 
 		loop {
 
-				inputted_command = STDIN.gets
+			inputted_command = STDIN.gets
 
 				# if stdin contains some text then parse it
 				if inputted_command != nil && inputted_command != ""
@@ -393,8 +401,8 @@ class MainProcessor
 						$log.debug "Did not match anything. Input: #{inputted_command}"
 					end
 				end
+			end
 		}
-
 	end
 
   # ---------------------------------------

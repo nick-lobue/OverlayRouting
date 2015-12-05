@@ -18,7 +18,7 @@ class Performer
 		payload = Hash.new
 
 		#Fill in initial trace route hopcount of 0 the hostname and time to get to node is 0
-		payload['data'] = "0 #{@source_hostname} 0\n"
+		payload['data'] = "0 #{main_processor.source_hostname} 0\n" #TODO hostname
 		#Starting hop time in milliseconds
 		payload["last_hop_time"] = (main_processor.node_time.to_f * 1000).ceil
 
