@@ -400,7 +400,7 @@ class MainProcessor
 						$log.debug "Did not match anything. Input: #{inputted_command}"
 					end
 				end
-			end
+			
 		}
 	end
 
