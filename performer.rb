@@ -1,5 +1,7 @@
 require 'base64'
 
+require_relative 'dijkstra_executor.rb'
+
 #Handles commands from the user e.g. TRACEROUTE, CHECKSTABLE, PING 
 class Performer
 
@@ -55,23 +57,44 @@ class Performer
 				main_processor.node_time)
 
 		control_message_packet 
-	end 
+	end
+
+	# ------------------------------------------------------------
+	# Constructs the initial packet that'll be sent to 
+	# the given destination hostname with the provided message.
+	# ------------------------------------------------------------
+	def self.perform_send_message(main_processor, destination_name, message)
+		if main_processor.nil? or destination_name.nil? or message.nil?
+			throw :invalid_argument
+		end
+
+		# add message data into the payload and message size
+		payload = Hash.new
+		payload["message"] = message
+		payload["size"] = message.size
+
+		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+				main_processor.source_ip, destination_name, nil, 0, "SND_MSG", payload, main_processor.node_time)
+
+		control_message_packet
+	end
 
 	# --------------------------------------------------------------
 	# Perform the DUMPTABLE hook by going through the routing
 	# table's entries and writing the source host ip, destination
 	# ip, next hop, and total distance from source to destination
 	# to a .csv file.
+	# @param main_processor Used to grab routing table.
 	# @param filename Specifies the name of the file to create.
 	# --------------------------------------------------------------
-	def perform_dumptable(filename)
+	def self.perform_dumptable(main_processor, filename)
 		filename = filename + ".csv" if filename !~ /.csv/
 
 		# creating the file and writing routing table information
 		File.open(filename, "w+") { |file|
-			if @routing_table != nil
-				@routing_table.each { |destination, info|
-					file.puts("#{@source_ip},#{info.destination.ip},#{info.next_hop.ip},#{info.distance}")
+			if main_processor.routing_table != nil
+				main_processor.routing_table.each { |destination, info|
+					file.puts("#{main_processor.source_hostname},#{info.destination.ip},#{info.next_hop.ip},#{info.distance}")
 				}
 			end
 
@@ -79,32 +102,38 @@ class Performer
 		}
 	end
 
-	# -----------------------------------------------------------------
+	# -----------------------------------------------------------------------
 	# Performs the FORCEUPDATE command by calling the flooding
 	# utility to determine if the current node's local topology
 	# has changed. If it changed, the flooding utility sends the
 	# new link state packet out and reconstruct the global topology
 	# graph. Then, the routing table is updated. If the link state
 	# packet didn't change this function will do nothing.
-	# -----------------------------------------------------------------
-	def perform_forceupdate
-		packet_changed = @flooding_utility.has_changed(@weights_config_filepath)
+	# @param main_processor Used to get flooding util, routing table, etc.
+	# -----------------------------------------------------------------------
+	def self.perform_forceupdate(main_processor)
+		packet_changed = main_processor.flooding_utility.has_changed(main_processor.weights_config_filepath)
 
 		if (packet_changed)
-			@routing_table_updating = true
-			@routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top.graph, @source_hostname)
-			@routing_table_updating = false
+		 	main_processor.routing_table_updating = true
+			main_processor.routing_table = DijkstraExecutor.routing_table(main_processor.flooding_utility.global_top, main_processor.source_hostname)
+			main_processor.routing_table_updating = false
+
+			$log.debug "Finished updating node's (#{main_processor.source_hostname}) routing table and global topology graph."
+		else
+			$log.debug "Node's (#{main_processor.source_hostname}) local topology did not change."
 		end
 	end
 
-	# ----------------------------------------------------------------
+	# -------------------------------------------------------------------
 	# Performs the CHECKSTABLE command by determining if the
 	# routing table is currently being updated. If it is, 'no' is
 	# printed specifying that the node is unstable. Otherwise,
 	# 'yes' is printed showing that the node is stable.
-	# ----------------------------------------------------------------
-	def perform_checkstable
-		if (@routing_table_updating)
+	# @param main_processor Used to check if routing table is updating.
+	# -------------------------------------------------------------------
+	def self.perform_checkstable(main_processor)
+		if (main_processor.routing_table_updating)
 			$stdout.puts("no")
 		else
 			$stdout.puts("yes")
@@ -114,7 +143,7 @@ class Performer
 	# ----------------------------------------------------------------
 	# Performs the SHUTDOWN command...
 	# ----------------------------------------------------------------
-	def perform_shutdown
+	def self.perform_shutdown(main_processor)
 		# shutdown all open sockets
 		# print current buffer information
 	end

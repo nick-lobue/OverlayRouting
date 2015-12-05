@@ -17,6 +17,8 @@ class ControlMessageHandler
 			self.handle_traceroute_cmp(main_processor, control_message_packet, optional_args)
 		elsif cmp_type.eql? "FTP"
 			self.handle_ftp_cmp(main_processor, control_message_packet, optional_args)
+		elsif cmp_type.eql? "SND_MSG"
+			self.handle_send_message_cmp(main_processor, control_message_packet, optional_args)
 		else
 			$log.warn "Control Message Type: #{cmp_type} not handled"
 		end
@@ -166,6 +168,50 @@ class ControlMessageHandler
 
 				return control_message_packet, {}
 			end
+		end
+	end
+
+	# -----------------------------------------------------------
+	# Reconstructs a control message packet according to the
+	# current node that it is on. Returns nil if the packet has
+	# gotten back to its origin, otherwise it returns the
+	# changed control message packet.
+	# -----------------------------------------------------------
+	def self.handle_send_message_cmp(main_processor, control_message_packet, optional_args)
+		payload = control_message_packet.payload
+
+		if payload["complete"]
+			# if the packet has made a round trip, determine if it was a success or
+			# not and print the corresponding messages
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
+				if payload["failure"]
+					$log.debug "SendMessage got back to the source but failed to fully send to recipient, payload: #{payload.inspect}"
+					puts "SENDMSG ERROR: #{control_message_packet.source_name} UNREACHABLE"
+				end
+			else
+				# hasn't gotten back to source yet, so return packet so that it'll be forwarded
+				return control_message_packet, {}
+			end
+		else
+			# arrived at the destination, send back to source node so that the source can 
+			# confirm if the message was fully received by inspecting the presence of
+			# the failure key in the payload hash
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
+				if payload["size"].to_i != payload["message"].size
+					payload["failure"] = true
+				else
+					$log.debug "SendMessage got to the destination successfully, payload: #{payload.inspect}"
+					puts("SENDMSG: #{control_message_packet.source_name} --> " + payload["message"])
+				end
+
+				payload["complete"] = true
+				control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+				main_processor.source_ip, control_message_packet.source_name,
+				control_message_packet.source_ip, 0, "SND_MSG", payload, main_processor.node_time)
+			end
+
+			control_message_packet.payload = payload
+			return control_message_packet, {}
 		end
 	end
 end
