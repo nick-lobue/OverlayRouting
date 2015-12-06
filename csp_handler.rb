@@ -1,4 +1,5 @@
 require 'base64'
+require 'openssl'
 
 require_relative 'control_msg_packet.rb'
 
@@ -6,6 +7,10 @@ require_relative 'control_msg_packet.rb'
 #Functions might return packets to add to forward_queue
 class ControlMessageHandler
 
+	#TODO delete and use actual encryption
+	def self.decrypt(key, plain)
+		return plain
+	end
 
 	def self.handle(main_processor, control_message_packet, optional_args=Hash.new)
 		$log.debug "Processing #{control_message_packet.inspect}"
@@ -19,10 +24,51 @@ class ControlMessageHandler
 			self.handle_ftp_cmp(main_processor, control_message_packet, optional_args)
 		elsif cmp_type.eql? "SND_MSG"
 			self.handle_send_message_cmp(main_processor, control_message_packet, optional_args)
+		elsif cmp_type.eql? "TOR"
+			self.handle_tor(main_processor, control_message_packet, optional_args)
 		else
 			$log.warn "Control Message Type: #{cmp_type} not handled"
+		end	
+	end
+
+
+	def self.handle_tor(main_processor, control_message_packet, optional_args)
+
+		tor_payload_encrypted = Base64.decode64(control_message_packet.payload["TOR"])
+
+		#tor_payload_encrypted = JSON.parse control_message_packet.payload["TOR"]
+
+		#Get symmetric key and iv from uppermost layer using RSA private key
+		upper_layer_key = main_processor.private_key.private_decrypt(Base64.decode64(control_message_packet.encryption['key']))
+		upper_layer_iv = main_processor.private_key.private_decrypt(Base64.decode64(control_message_packet.encryption['iv']))
+
+		decipher = OpenSSL::Cipher::AES128.new(:CBC)
+		decipher.decrypt
+		decipher.key = upper_layer_key
+		decipher.iv = upper_layer_iv
+
+		#decrypt with own RSA private key
+
+		tor_payload = decipher.update(tor_payload_encrypted) + decipher.final
+		tor_payload = JSON.parse tor_payload
+
+		$log.debug "onions: \"#{tor_payload.inspect}\""
+
+		#payload = JSON.parse payload
+		if tor_payload["complete"] == true
+			#Arrived at destination
+			puts "Received onion message: \"#{tor_payload["message"]}\""
+		else
+			#Current hop is intermediate hop
+			#Unwrap lower cmp and forward
+			csp_str = tor_payload["next_cmp"]
+			$log.debug "next_cmp: #{csp_str.inspect}"
+			csp = ControlMessagePacket.from_json_hash JSON.parse csp_str
+			$log.debug "TOR unwrapped and forwarding to #{csp.destination_name} #{csp.inspect}"
+			return csp, {}
 		end
-			
+		
+
 	end
 
 	#Handle a traceroute message 

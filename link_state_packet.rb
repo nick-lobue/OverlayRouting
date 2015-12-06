@@ -2,16 +2,16 @@ require 'json'
 require_relative 'packet.rb'
 
 class LinkStatePacket < Packet
-	attr_accessor :source_name, :source_ip, :seq_numb, :neighbors
+	attr_accessor :source_name, :source_ip, :seq_numb, :neighbors, :public_key
 
 	# ---------------------------------------
 	# Initialize the fields of the link state
 	# packet and create a new hash to store 
 	# the neighbors of the node
 	# ---------------------------------------
-	def initialize(source_name, source_ip, seq_numb, neighbors)
+	def initialize(source_name, source_ip, seq_numb, neighbors, public_key)
 
-		if source_name.nil? or source_ip.nil? or seq_numb.nil?
+		if source_name.nil? or source_ip.nil? or seq_numb.nil? or public_key.nil?
 			throw :invalid_argument
 		end
 
@@ -23,6 +23,7 @@ class LinkStatePacket < Packet
 		@source_name = source_name
 		@source_ip = source_ip
 		@seq_numb = seq_numb
+		@public_key = public_key.to_s
 
 		# If the neighbors parameter is nil then 
 		# initialize the link state packet to have
@@ -40,7 +41,7 @@ class LinkStatePacket < Packet
 	# -------------------------------------
 	def to_json
 		{ 'packet_type' => "LSP", 'source_name' => @source_name, 'source_ip' => @source_ip, 'seq_numb' => 
-			@seq_numb, 'neighbors' => @neighbors}.to_json
+			@seq_numb, 'neighbors' => @neighbors, 'key' => @public_key }.to_json
 	end
 
 	# -------------------------------------
@@ -52,7 +53,7 @@ class LinkStatePacket < Packet
 		data = JSON.parse(input)
 
 		lsp = LinkStatePacket.new(data['source_name'], data['source_ip'], 
-			data['seq_numb'].to_i, data['neighbors'])
+			data['seq_numb'].to_i, data['neighbors'], data['key'])
 
 		#keys are arrays and need to be parsed separetly
 		unless data['neighbors'].nil?
@@ -76,7 +77,7 @@ class LinkStatePacket < Packet
 	def self.from_json_hash(data)
 
 		lsp = LinkStatePacket.new(data['source_name'], data['source_ip'], 
-			data['seq_numb'].to_i, data['neighbors'])
+			data['seq_numb'].to_i, data['neighbors'], data['key'])
 		
 		#keys are arrays and need to be parsed separetly
 		unless data['neighbors'].nil?
