@@ -51,7 +51,12 @@ class MainProcessor
 				@weights_config_filepath = $1
 			elsif line =~ /\s*nodes\s*=\s*(.+)\s*/
 				@nodes_config_filepath = $1
+			elsif line =~ /\s*maxPacketSize\s*=\s*(\d+)\s*/
+				@maxPacketSize = $1.to_i
+			elsif line =~ /\s*pingTimeout\s*=\s*(\d+)\s*/
+				@timeout = $1.to_i
 			end
+				
 		end
 	end
 
@@ -279,7 +284,10 @@ class MainProcessor
 				socket = TCPSocket.open(next_hop_ip, next_hop_port)
 
 
-				socket.puts(packet.to_json_from_cmp)
+
+				payload = packet
+				#socket.puts(packet.to_json_from_cmp)
+
 
 				# Close socket in use
 				socket.close

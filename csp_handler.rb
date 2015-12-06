@@ -84,7 +84,7 @@ class ControlMessageHandler
 		if payload["failure"]
 
 			if control_message_packet.destination_name.eql? main_processor.source_hostname
-				$log.debug "Traceroute timeout #{(main_processor.node_time.to_f ) - control_message_packet.time_sent}"
+				$log.debug "Time passed since source #{(main_processor.node_time.to_f ) - control_message_packet.time_sent}"
 				$log.debug "Failed Traceroute arrived back #{payload.inspect}"
 				puts "#{main_processor.timeout} ON #{payload["HOPCOUNT"]}"
 			else
@@ -110,7 +110,7 @@ class ControlMessageHandler
 			
 		else
 
-			$log.debug "Traceroute timeout #{(main_processor.node_time.to_f ) - control_message_packet.time_sent}"
+			$log.debug "Time passed since source #{(main_processor.node_time.to_f ) - control_message_packet.time_sent}"
 			#If the timeout is less than or equal to the current time - the time the packet was sent give a failure
 			if main_processor.timeout <= (main_processor.node_time.to_f ) - control_message_packet.time_sent
 				$log.debug "Traceroute timeout #{(main_processor.node_time.to_f ) - control_message_packet.time_sent}"
