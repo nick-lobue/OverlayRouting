@@ -49,16 +49,17 @@ class Performer
 
 		#TODO handle errors with binread
 		file_contents = IO.binread(file_name) #Reads as ASCII-8BIT
-		file_contents_encoded = Base64.encode64(file_contents) #US-ASCII
+		file_contents_encoded = Base64.encode64(file_contents).gsub("\n", '') #US-ASCII
 
 		payload['size'] = file_contents.length
 
 		#Fill in initial trace route hopcount of 0 the hostname and time to get to node is 0
 		payload['data'] = file_contents_encoded
 
+
 		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
-				main_processor.source_ip, destination_name, nil, 0, "FTP", payload,
-				main_processor.node_time)
+				main_processor.source_ip, destination_name, nil, nil, "FTP", payload,
+				main_processor.node_time, nil)
 
 		control_message_packet 
 	end

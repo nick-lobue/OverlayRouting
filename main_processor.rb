@@ -166,9 +166,79 @@ class MainProcessor
 	# ---------------------------------------------------------------------
 	def control_message_listener
 
+
+		frag_payload = ""
+		curr_seq = -1
+		curr_fragid = 0
+		reconstructing_frag = false
+		prev_cmp_frag = -1
+		inital_cmp_frag = nil
+
 		#pop and process all available control message packets
 		#will block until packets pushed to queue
 		while control_message_packet = @cmp_queue.pop
+
+			$log.debug "received #{control_message_packet.payload.to_s} fragInfo #{control_message_packet.fragInfo}"
+
+			curr_frag_id = -1
+			if not control_message_packet.fragInfo["fragId"].nil?
+				curr_frag_id = control_message_packet.fragInfo["fragId"]
+			end
+
+			if reconstructing_frag and curr_seq.eql? control_message_packet.seq_numb and curr_frag_id.eql? (prev_cmp_frag + 1)
+
+				frag_payload += control_message_packet.payload
+				prev_cmp_frag += 1
+
+				if control_message_packet.fragInfo["last"]
+					#reassemble to orignal payload
+					original_payload = JSON.parse (frag_payload)
+					control_message_packet.payload = original_payload
+
+					$log.debug "Assembled fragmented packet #{original_payload}"
+
+					#clear fragmentation fields
+					control_message_packet.fragInfo = Hash.new
+					curr_seq = -1
+					reconstructing_frag = false
+					frag_payload = ""
+					prev_cmp_frag = -1
+				else
+					next
+				end
+			elsif not curr_seq.eql? control_message_packet.seq_numb or not curr_frag_id.eql? (prev_cmp_frag + 1)
+
+				if curr_seq.eql? (prev_cmp_frag + 1)
+					$log.debug("Got out of order fragment: #{curr_frag_id} will drop");
+					next
+				elsif reconstructing_frag
+					$log.info "Cannot reconstruct packet seq: #{curr_seq} prev frag id #{prev_cmp_frag} new packet frag id: #{curr_frag_id}  uncomplete payload: #{frag_payload}"
+					$log.info "ovverriding packet seq num #{control_message_packet.seq_numb}"
+					#clear data from old fragmentating packet and use fragmentation info for new packet
+					frag_payload = ""
+					reconstructing_frag = false
+					curr_seq = -1
+					prev_cmp_frag = -1
+					#TODO check if current packet is supposed to be fragmented
+
+					if control_message_packet.type.eql? "FTP"
+						#Special case inform FTP giving whatever payload we can to FTP
+						inital_cmp_frag.payload = frag_payload 
+						ControlMessageHandler.handle(self, inital_cmp_frag, {"fragmentation_failure" => true})
+					end
+				end
+
+				if control_message_packet.fragInfo["fragmented"]
+					#new packet to fragment
+					curr_seq = control_message_packet.seq_numb
+					frag_payload = control_message_packet.payload
+					reconstructing_frag = true
+					inital_cmp_frag = control_message_packet
+					prev_cmp_frag = 1
+					next
+				end
+			end
+				
 
 			#Note to Nick and Tyler: If you need to add more arguments just pass them in
 			#the optional_args hash. Then retrive it from the hash.
@@ -180,6 +250,9 @@ class MainProcessor
 				@forward_queue << packets_to_forward
 			end
 
+			frag_payload = ""
+			reconstructing_frag = false
+			curr_seq = -1
 		end
 	end
 
@@ -283,11 +356,51 @@ class MainProcessor
 
 				socket = TCPSocket.open(next_hop_ip, next_hop_port)
 
+				
+				#fragment if not already fragmented and if the payload string is greater than
+				if not packet.fragInfo["fragmented"] and packet.payload.to_json.size >= @maxPacketSize
+					$log.debug "Fragmenting"
+					
 
+					payload_json_str = packet.payload.to_json
+					fragId = 1
 
-				payload = packet
-				#socket.puts(packet.to_json_from_cmp)
+					#Break payload into chunks of @maxPacketSize and create a
+					#new control message packet for each segment
+					payload_chunk_arr_arr = payload_json_str.chars.to_a.each_slice(@maxPacketSize).to_a
+					payload_chunk_arr_arr.each_with_index.map {|payload_chunk_arr, index|
+						payload_chunk = payload_chunk_arr.join
 
+						if payload_chunk.class.name.eql? "Array"
+							payload_chunk = payload_chunk.join
+						end
+
+						#Deep copy of original packet
+						frag_packet = Marshal.load(Marshal.dump(packet))
+						
+						#copy payload chunk into packet payload
+						frag_packet.payload = payload_chunk
+
+						$log.debug ("payload chunk #{payload_chunk}:#{payload_chunk.class.name}")
+
+						#update fields
+						fragInfo = Hash.new
+						fragInfo["fragId"] = fragId
+						fragInfo["fragmented"] = true
+
+						if index == (payload_chunk_arr_arr.length - 1)
+							fragInfo["last"] = true
+						end
+
+						frag_packet.fragInfo = fragInfo
+
+						socket.puts frag_packet.to_json_from_cmp
+						fragId+= 1
+					}
+				else
+					$log.debug "not fragmenting"
+					socket.puts(packet.to_json_from_cmp)
+				end
 
 				# Close socket in use
 				socket.close
