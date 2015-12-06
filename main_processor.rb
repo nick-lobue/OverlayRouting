@@ -257,14 +257,14 @@ class MainProcessor
 
 				socket = TCPSocket.open(next_hop_ip, next_hop_port)
 
-				socket.puts(packet.to_json)
+				socket.puts(packet.to_json_from_cmp)
 
 				# Close socket in use
 				socket.close
 
 				$log.debug "Succesfully sent packet with destination: 
 				#{destination_hostname} to #{next_hop_hostname}
-				packet: #{packet.to_json.inspect}"
+				packet: #{packet.to_json_from_cmp.inspect}"
 			rescue Errno::ECONNREFUSED => e
 
 				#TODO handle this. Could mean link or node is down

@@ -1,5 +1,5 @@
 require 'base64'
-
+require 'json'
 require_relative 'dijkstra_executor.rb'
 
 #Handles commands from the user e.g. TRACEROUTE, CHECKSTABLE, PING 
@@ -163,9 +163,7 @@ class Performer
 			return
 		end
 
-		#reverse and add source hostname to end
-		path = path.reverse
-		path.push main_processor.source_hostname
+		#path.push main_processor.source_hostname
 
 		$log.debug "TOR path #{path}"
 		#TODO replace cmp with second to last path
@@ -197,12 +195,12 @@ class Performer
 			if not next_hop_cmp.nil?
 				#TODO create keys mutex
 
-				payload["TOR"]["next_cmp"] = next_hop_cmp.to_json
+				payload["TOR"]["next_cmp"] = next_hop_cmp
 			end
 
 			#next_cmp can only be decrypted by the next_hop
 			#e.g. if curr hop is n3 then next_cmp can only be decrypted by n4
-			payload["TOR"] = encrypt(main_processor.keys[next_hop], payload["TOR"].to_json)
+			payload["TOR"] = encrypt(main_processor.keys[next_hop], JSON.generate(payload["TOR"]))
 
 			#A control message packet from hop to next_hop
 			cmp = ControlMessagePacket.new(hop,

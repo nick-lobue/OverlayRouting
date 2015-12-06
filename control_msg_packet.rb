@@ -33,7 +33,7 @@ class ControlMessagePacket < Packet
 	# Override the to json method to set up 
 	# object for parsing
 	# -------------------------------------
-	def to_json
+	def to_json_from_cmp
 		#TODO add rest of required fields
 		{ 'packet_type' => "CMP", 'source_name' => @source_name, 'source_ip' => @source_ip, 'seq_numb' => 
 			@seq_numb, 'type'=> @type, 'payload' => @payload, 'destination_name' => @destination_name,

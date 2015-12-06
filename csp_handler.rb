@@ -24,7 +24,7 @@ class ControlMessageHandler
 		elsif cmp_type.eql? "SND_MSG"
 			self.handle_send_message_cmp(main_processor, control_message_packet, optional_args)
 		elsif cmp_type.eql? "TOR"
-			self.handle_send_message_cmp(main_processor, control_message_packet, optional_args)
+			self.handle_tor(main_processor, control_message_packet, optional_args)
 		else
 			$log.warn "Control Message Type: #{cmp_type} not handled"
 		end	
@@ -38,14 +38,16 @@ class ControlMessageHandler
 
 		payload = decrypt(key, control_message_packet.payload)
 
-		if payload["TOR"]["complete"]
+		payload = JSON.parse payload
+		if payload["TOR"]["complete"] == true
 			#Arrived at destination
-			puts "Received onion message: \"#{payload["TOR"]["message"]}\""
+			puts "Received onion message: \"#{payload["TOR"].inspect}\""
 		else
 			#Current hop is intermediate hop
 			#Unwrap lower cmp and forward
 			csp_str = control_message_packet.payload["TOR"]["next_cmp"]
 			csp = ControlMessagePacket.from_json_hash csp_str
+			$log.debug "TOR unwrapped and forwarding to #{csp.destination_name} #{csp.inspect}"
 			return csp, {}
 		end
 		
