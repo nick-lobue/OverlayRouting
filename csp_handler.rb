@@ -1,4 +1,5 @@
 require 'base64'
+require 'openssl'
 
 require_relative 'control_msg_packet.rb'
 
@@ -36,9 +37,16 @@ class ControlMessageHandler
 		#TODO create keys mutex
 		key = main_processor.keys[main_processor.source_hostname]
 
-		payload = decrypt(key, control_message_packet.payload)
 
-		tor_payload = JSON.parse control_message_packet.payload["TOR"]
+		tor_payload_encrypted = control_message_packet.payload["TOR"]
+
+		#tor_payload_encrypted = JSON.parse control_message_packet.payload["TOR"]
+
+		#decrypt with own private key
+		tor_payload = main_processor.private_key.private_decrypt(Base64.decode64(tor_payload_encrypted))
+
+		$log.debug "onions: \"#{tor_payload.inspect}\""
+
 		#payload = JSON.parse payload
 		if tor_payload["complete"] == true
 			#Arrived at destination

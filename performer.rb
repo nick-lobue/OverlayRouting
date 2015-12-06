@@ -1,5 +1,6 @@
 require 'base64'
 require 'json'
+require 'openssl'
 require_relative 'dijkstra_executor.rb'
 
 #Handles commands from the user e.g. TRACEROUTE, CHECKSTABLE, PING 
@@ -181,7 +182,7 @@ class Performer
 		#The last hop's payload will contain the message encrypted
 		payload = Hash.new
 		payload["TOR"] = Hash.new
-		payload["TOR"]["message"] = encrypt(main_processor.keys[destination_name], message)
+		payload["TOR"]["message"] = message
 		payload["TOR"]["complete"] = true
 
 
@@ -200,7 +201,10 @@ class Performer
 
 			#next_cmp can only be decrypted by the next_hop
 			#e.g. if curr hop is n3 then next_cmp can only be decrypted by n4
-			payload["TOR"] = encrypt(main_processor.keys[next_hop], JSON.generate(payload["TOR"]))
+			tor_json = JSON.generate(payload["TOR"])
+			$log.debug "Tor: JSON #{tor_json.inspect}"
+
+			payload["TOR"] = Base64.encode64(main_processor.keys[next_hop].public_encrypt(tor_json))
 
 			#A control message packet from hop to next_hop
 			cmp = ControlMessagePacket.new(hop,

@@ -1,6 +1,7 @@
 require 'time'
 require 'socket'
 require 'thread'
+require 'openssl'
 
 require_relative 'packet.rb'
 require_relative 'link_state_packet.rb'
@@ -21,7 +22,9 @@ $debug = true #TODO set to false on submission
 # --------------------------------------------
 class MainProcessor
 
-	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table, :flooding_utility, :weights_config_filepath, :nodes_config_filepath, :routing_table_updating, :keys
+	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table,
+	:flooding_utility, :weights_config_filepath, :nodes_config_filepath,
+	:routing_table_updating, :keys, :private_key, :public_key
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
@@ -97,7 +100,7 @@ class MainProcessor
 		extract_ip_and_port(@weights_config_filepath, @nodes_config_filepath, @source_hostname)
 
 		#generate public and private keys
-		@private_key = OpenSSL::PKey::RSA.new(2048)
+		@private_key = OpenSSL::PKey::RSA.new(4098)
 		@public_key = @private_key.public_key
 
 		#TODO get keys from lsp
@@ -117,7 +120,7 @@ class MainProcessor
 		#Create initial blank routing table
 		@routing_table = RoutingTable.blank_routing_table(@source_hostname, @source_ip)
 
-		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip, @port_hash, @weights_config_filepath)
+		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip, @port_hash, @weights_config_filepath, @public_key)
 
 		@routing_table_mutex = Mutex.new
 		@routing_table_updating = false
@@ -197,6 +200,8 @@ class MainProcessor
 
 			@routing_table_updating = false
 
+			@keys[link_state_packet.source_name] = OpenSSL::PKey::RSA.new link_state_packet.public_key
+			$log.debug "Added public key #{link_state_packet.source_name} => #{@keys[link_state_packet.source_name]}"
 		end
 	end
 
