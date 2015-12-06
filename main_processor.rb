@@ -96,6 +96,10 @@ class MainProcessor
 		parse_config_file(@config_filepath)
 		extract_ip_and_port(@weights_config_filepath, @nodes_config_filepath, @source_hostname)
 
+		#generate public and private keys
+		@private_key = OpenSSL::PKey::RSA.new(2048)
+		@public_key = @private_key.public_key
+
 		#TODO get keys from lsp
 		@keys = Hash.new
 

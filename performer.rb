@@ -195,7 +195,7 @@ class Performer
 			if not next_hop_cmp.nil?
 				#TODO create keys mutex
 
-				payload["TOR"]["next_cmp"] = next_hop_cmp
+				payload["TOR"]["next_cmp"] = next_hop_cmp.to_json_from_cmp
 			end
 
 			#next_cmp can only be decrypted by the next_hop

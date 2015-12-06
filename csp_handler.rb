@@ -38,15 +38,17 @@ class ControlMessageHandler
 
 		payload = decrypt(key, control_message_packet.payload)
 
-		payload = JSON.parse payload
-		if payload["TOR"]["complete"] == true
+		tor_payload = JSON.parse control_message_packet.payload["TOR"]
+		#payload = JSON.parse payload
+		if tor_payload["complete"] == true
 			#Arrived at destination
 			puts "Received onion message: \"#{payload["TOR"].inspect}\""
 		else
 			#Current hop is intermediate hop
 			#Unwrap lower cmp and forward
-			csp_str = control_message_packet.payload["TOR"]["next_cmp"]
-			csp = ControlMessagePacket.from_json_hash csp_str
+			csp_str = tor_payload["next_cmp"]
+			$log.debug "next_cmp: #{csp_str.inspect}"
+			csp = ControlMessagePacket.from_json_hash JSON.parse csp_str
 			$log.debug "TOR unwrapped and forwarding to #{csp.destination_name} #{csp.inspect}"
 			return csp, {}
 		end
