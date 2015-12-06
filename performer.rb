@@ -146,17 +146,18 @@ class Performer
 
 	#Note: I will be using the network n1 -> n2 -> n3 -> n4 as an example network here
 	def self.perform_tor(main_processor, destination_name, message)
-		#TODO check if destination name is in routing table first
-		#TODO create mutex on any operations involving graph
 		
 		if main_processor.source_hostname.eql? destination_name
 			puts "Error: you can't onion route to self"
 			return
 		end
 
-		#TODO check if message is str
+		unless message.class.name.eql? "String"
+			puts "Invalid message must be of type String"
+		end
+
 		path = []
-		
+
 		main_processor.graph_mutex.synchronize {
 			#e.g [n2, n3, n4]
 			path = DijkstraExecutor.find_path(main_processor.flooding_utility.global_top, 
@@ -171,12 +172,6 @@ class Performer
 		#path.push main_processor.source_hostname
 
 		$log.debug "TOR path #{path}"
-		#TODO replace cmp with second to last path
-		#passing fake node time to stay anonymous. 
-		#If I pass in the time someone could tell who I am by the difference.
-
-		#next_hop_cmp = ControlMessagePacket.new(path[-2],
-		#	nil, destination_name, nil, 0, "TOR", payload, 0)
 
 		#The next hop in the series.
 		#initially it's self
@@ -206,7 +201,7 @@ class Performer
 			#next_cmp can only be decrypted by the next_hop
 			#e.g. if curr hop is n3 then next_cmp can only be decrypted by n4
 			tor_json = JSON.generate(payload["TOR"])
-			$log.debug "Tor: JSON #{tor_json.inspect}"
+			
 
 			#payload["TOR"] = Base64.encode64(main_processor.keys[next_hop].public_encrypt(tor_json))
 
@@ -218,18 +213,19 @@ class Performer
 			tor_encrypted = cipher.update(tor_json) + cipher.final
 
 			payload["TOR"] = Base64.encode64(tor_encrypted)
-
+			$log.debug "encrypted payload[\"Tor\"] #{payload["TOR"].inspect}"
 		
-			hop_rsa_key = main_processor.keys[next_hop]
-			while hop_rsa_key.nil?
+			next_hop_rsa_key = main_processor.keys[next_hop]
+			
+			while next_hop_rsa_key.nil?
 				$log.debug "Waiting to receive RSA keys for #{next_hop}"
 				sleep 1
-				hop_rsa_key = main_processor.keys[next_hop]
+				next_hop_rsa_key = main_processor.keys[next_hop]
 			end
 
 			#Encrypt aes key and iv so that only the receiver of this layer can decrypt
-			encrypted_key = Base64.encode64(hop_rsa_key.public_encrypt(key))
-			encrypted_iv = Base64.encode64(hop_rsa_key.public_encrypt(iv))
+			encrypted_key = Base64.encode64(next_hop_rsa_key.public_encrypt(key))
+			encrypted_iv = Base64.encode64(next_hop_rsa_key.public_encrypt(iv))
 
 			#A control message packet from hop to next_hop
 			cmp = ControlMessagePacket.new(hop,

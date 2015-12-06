@@ -34,15 +34,11 @@ class ControlMessageHandler
 
 	def self.handle_tor(main_processor, control_message_packet, optional_args)
 
-		#TODO create keys mutex
-		key = main_processor.keys[main_processor.source_hostname]
-
-
 		tor_payload_encrypted = Base64.decode64(control_message_packet.payload["TOR"])
 
 		#tor_payload_encrypted = JSON.parse control_message_packet.payload["TOR"]
 
-		#Get key and iv from uppermost layer using RSA private key
+		#Get symmetric key and iv from uppermost layer using RSA private key
 		upper_layer_key = main_processor.private_key.private_decrypt(Base64.decode64(control_message_packet.encryption['key']))
 		upper_layer_iv = main_processor.private_key.private_decrypt(Base64.decode64(control_message_packet.encryption['iv']))
 
