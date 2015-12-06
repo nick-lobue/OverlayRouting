@@ -139,6 +139,70 @@ class Performer
 		end
 	end
 
+	#Note: I will be using the network n1 -> n2 -> n3 -> n4 as an example network here
+	def self.perform_tor(main_processor, destination_name, message)
+		#TODO check if destination name is in routing table first
+		#TODO create mutex on any operations involving graph
+		
+		if main_processor.source_hostname.eql? destination_name
+			puts "Error: you can't onion route to self"
+			return
+		end
+
+		#e.g [n2, n3, n4]
+		path = DijkstraExecutor.find_path(main_processor.graph, main_processor, destination_name)
+
+		if path.empty?
+			puts "No route found"
+			return
+		end
+
+		#reverse and add source hostname to end
+		path = path.reverse
+		path.push main_processor.source_hostname
+
+		#TODO replace cmp with second to last path
+		#passing fake node time to stay anonymous. 
+		#If I pass in the time someone could tell who I am by the difference.
+
+		#next_hop_cmp = ControlMessagePacket.new(path[-2],
+		#	nil, destination_name, nil, 0, "TOR", payload, 0)
+
+		#The next hop in the series.
+		#initially it's self
+		next_hop = destination
+		next_hop_cmp = nil
+
+		#The last hop's payload will contain the message encrypted
+		payload = Hash.new
+		payload["message"] = encrypt(main_processor.keys[destination_name], message)
+
+		#itterate the path from reverse creating a control message packet where
+		#Only the next hop can decrypt
+		#Note: will use n3 as the current hop and n4 as the next hop
+		path.each{ |hop|
+
+			if not next_hop_cmp.nil?
+				#TODO create keys mutex
+				#next_cmp can only be decrypted by the next_hop
+				#e.g. if curr hop is n3 then next_cmp can only be decrypted by n4
+				payload["next_cmp"] = encrypt(main_processor.keys[next_hop] next_hop_cmp.to_json)
+			end
+
+			#A control message packet from hop to next_hop
+			cmp = ControlMessagePacket.new(hop,
+				nil, next_hop, nil, 0, "TOR", payload, 0)
+
+			#clear payload for next hop
+			payload = Hash.new
+			next_hop_cmp = cmp
+			next_hop = hop
+		}
+
+
+		return cmp
+	end
+
 	# ----------------------------------------------------------------
 	# Performs the SHUTDOWN command...
 	# ----------------------------------------------------------------

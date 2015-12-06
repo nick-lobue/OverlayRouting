@@ -247,5 +247,18 @@ class DijkstraExecutor
     }
   end
 
+  #returns direct path from source to destination
+  def self.find_path(graph, source, destination)
+  	path = Array.new
+  	curr_node = graph.get_node(destination)
+
+  	#itterate from parent pointer up to source appending each nodes hostname
+  	until curr_node.nil? or curr_node.host_name.eql? source
+  		path.push curr_node.host_name
+  		curr_node = curr_node.parent #itterate to parent
+  	end
+
+  	return path
+  end
 
 end

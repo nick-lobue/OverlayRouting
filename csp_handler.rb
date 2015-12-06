@@ -21,8 +21,40 @@ class ControlMessageHandler
 			self.handle_send_message_cmp(main_processor, control_message_packet, optional_args)
 		else
 			$log.warn "Control Message Type: #{cmp_type} not handled"
+		end	
+	end
+
+	#lists the paths from one node to another
+	def self.handle_path(main_processor, control_message_packet, optional_args)
+
+		payload = control_message_packet.payload
+
+		if payload["complete"]
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
+				$log.debug "Traceroute arrived back #{payload.inspect}"
+				puts payload["data"]
+			else
+				#extract public keys and add to main_processor.public_keys
+				main_processor.public_keys.merge(payload["public_keys"])
+				#Else data is complete. It is just heading back to original source
+				return control_message_packet, {}
+			end
+		else
+
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
+				payload["complete"] = true
+				control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+				main_processor.source_ip, control_message_packet.source_name,
+				control_message_packet.source_ip, 0, "TRACEROUTE", payload, main_processor.node_time)
+
+			end
+
 		end
-			
+	end
+
+	def self.handle_tor(main_processor, control_message_packet, optional_args)
+		destination_key = main_processor.public_keys[control_message_packet.destination_name]
+
 	end
 
 	#Handle a traceroute message 
