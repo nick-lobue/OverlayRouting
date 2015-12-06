@@ -149,6 +149,8 @@ class Performer
 			return
 		end
 
+		#TODO check if message is str
+
 		#e.g [n2, n3, n4]
 		path = DijkstraExecutor.find_path(main_processor.graph, main_processor, destination_name)
 
@@ -175,7 +177,9 @@ class Performer
 
 		#The last hop's payload will contain the message encrypted
 		payload = Hash.new
-		payload["message"] = encrypt(main_processor.keys[destination_name], message)
+		payload["TOR"] = Hash.new
+		payload["TOR"]["message"] = encrypt(main_processor.keys[destination_name], message)
+		payload["TOR"]["complete"] = true
 
 		#itterate the path from reverse creating a control message packet where
 		#Only the next hop can decrypt
@@ -184,10 +188,13 @@ class Performer
 
 			if not next_hop_cmp.nil?
 				#TODO create keys mutex
-				#next_cmp can only be decrypted by the next_hop
-				#e.g. if curr hop is n3 then next_cmp can only be decrypted by n4
-				payload["next_cmp"] = encrypt(main_processor.keys[next_hop] next_hop_cmp.to_json)
+
+				payload["TOR"]["next_cmp"] = next_hop_cmp.to_json
 			end
+
+			#next_cmp can only be decrypted by the next_hop
+			#e.g. if curr hop is n3 then next_cmp can only be decrypted by n4
+			payload["TOR"] = encrypt(main_processor.keys[next_hop], payload["TOR"].to_json)
 
 			#A control message packet from hop to next_hop
 			cmp = ControlMessagePacket.new(hop,
@@ -195,6 +202,7 @@ class Performer
 
 			#clear payload for next hop
 			payload = Hash.new
+			payload["TOR"] = Hash.new
 			next_hop_cmp = cmp
 			next_hop = hop
 		}
