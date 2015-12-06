@@ -155,9 +155,13 @@ class Performer
 		end
 
 		#TODO check if message is str
-
-		#e.g [n2, n3, n4]
-		path = DijkstraExecutor.find_path(main_processor.flooding_utility.global_top, main_processor, destination_name)
+		path = []
+		
+		main_processor.graph_mutex.synchronize {
+			#e.g [n2, n3, n4]
+			path = DijkstraExecutor.find_path(main_processor.flooding_utility.global_top, 
+				main_processor, destination_name)
+		}
 
 		if path.empty?
 			puts "No route found"

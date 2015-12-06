@@ -24,7 +24,7 @@ class MainProcessor
 
 	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table,
 	:flooding_utility, :weights_config_filepath, :nodes_config_filepath,
-	:routing_table_updating, :keys, :private_key, :public_key
+	:routing_table_updating, :keys, :private_key, :public_key, :graph_mutex
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
@@ -117,17 +117,22 @@ class MainProcessor
 
 		@port_hash = parse_port @nodes_config_filepath
 
+		@routing_table_mutex = Mutex.new
+		@graph_mutex = Mutex.new
+
 		#Create initial blank routing table
 		@routing_table = RoutingTable.blank_routing_table(@source_hostname, @source_ip)
 
 		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip, @port_hash, @weights_config_filepath, @public_key)
 
-		@routing_table_mutex = Mutex.new
 		@routing_table_updating = false
 		@packet_socket = TCPServer.open(@source_port)
 
-    	#flood initial link state packet
-    	@flooding_utility.initial_flood
+		@graph_mutex.synchronize {
+			#flood initial link state packet
+			@flooding_utility.initial_flood
+		}
+
 		
 		#@control_message_socket = TCPServer.open(@source_port)
 	end
@@ -178,30 +183,35 @@ class MainProcessor
 		while link_state_packet = @lsp_queue.pop
 			$log.debug "Processing #{link_state_packet.inspect}"
 
-			# flood the received packet, update topology graph, and update routing table
-			@flooding_utility.check_link_state_packet(link_state_packet)
+			@graph_mutex.synchronize {
+				# flood the received packet, update topology graph, and update routing table
+				@flooding_utility.check_link_state_packet(link_state_packet)
 
-			#Optimization: Process additional link state packets but without blocking
-			until @lsp_queue.empty?
-				@flooding_utility.check_link_state_packet(@lsp_queue.pop)
-			end
+				@keys[link_state_packet.source_name] = OpenSSL::PKey::RSA.new link_state_packet.public_key
+				$log.debug "Added public key #{link_state_packet.source_name} => #{@keys[link_state_packet.source_name]}"
 
-			@routing_table_updating = true
+				#Optimization: Process additional link state packets but without blocking
+				until @lsp_queue.empty?
+					link_state_packet = @lsp_queue.pop
+					@flooding_utility.check_link_state_packet(link_state_packet)
+					@keys[link_state_packet.source_name] = OpenSSL::PKey::RSA.new link_state_packet.public_key
+					$log.debug "Added public key #{link_state_packet.source_name} => #{@keys[link_state_packet.source_name]}"
+				end
 
-			#$log.debug "Global topology: #{@flooding_utility.global_top.graph.inspect}"
-			updated_routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top, @source_hostname)
+				@routing_table_updating = true
 
-			@routing_table_mutex.synchronize {
-				@routing_table = updated_routing_table
+				#$log.debug "Global topology: #{@flooding_utility.global_top.graph.inspect}"
+				updated_routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top, @source_hostname)
+
+				@routing_table_mutex.synchronize {
+					@routing_table = updated_routing_table
+				}
+
+				$log.info "Routing table updated"
+				@routing_table.print_routing if $debug
+
+				@routing_table_updating = false
 			}
-
-			$log.info "Routing table updated"
-			@routing_table.print_routing if $debug
-
-			@routing_table_updating = false
-
-			@keys[link_state_packet.source_name] = OpenSSL::PKey::RSA.new link_state_packet.public_key
-			$log.debug "Added public key #{link_state_packet.source_name} => #{@keys[link_state_packet.source_name]}"
 		end
 	end
 
