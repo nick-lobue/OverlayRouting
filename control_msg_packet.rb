@@ -38,7 +38,7 @@ class ControlMessagePacket < Packet
 		#TODO add rest of required fields
 		{ 'packet_type' => "CMP", 'source_name' => @source_name, 'source_ip' => @source_ip, 'seq_numb' => 
 			@seq_numb, 'type'=> @type, 'payload' => @payload, 'destination_name' => @destination_name,
-			"destination_ip" => @destination_ip, "time_sent" => time_sent, 'encryption' => @encryption}.to_json
+			"destination_ip" => @destination_ip, "time_sent" => time_sent.to_f, 'encryption' => @encryption}.to_json
 	end
 
 	#Takes a json hash and fully constructs it into a ControlMessagePacket

@@ -81,35 +81,76 @@ class ControlMessageHandler
 
 		payload = control_message_packet.payload
 
-		if payload["complete"]
+		if payload["failure"]
+
 			if control_message_packet.destination_name.eql? main_processor.source_hostname
-				$log.debug "Traceroute arrived back #{payload.inspect}"
-				puts payload["data"]
+				$log.debug "Traceroute timeout #{(main_processor.node_time.to_f ) - control_message_packet.time_sent}"
+				$log.debug "Failed Traceroute arrived back #{payload.inspect}"
+				puts "#{main_processor.timeout} ON #{payload["HOPCOUNT"]}"
+			else
+				#Else data is complete. It is just heading back to original source
+				return control_message_packet, {}
+			end
+		elsif payload["complete"]
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
+
+				$log.debug "Traceroute timeout #{(main_processor.node_time.to_f ) - control_message_packet.time_sent}"
+				if main_processor.timeout <= (main_processor.node_time.to_f ) - control_message_packet.time_sent
+					$log.debug "Failed Traceroute arrived back #{payload.inspect}"
+					puts "#{main_processor.timeout} ON #{payload["HOPCOUNT"]}"
+				else
+					#TODO additional timeout check here
+					$log.debug "Traceroute arrived back #{payload.inspect}"
+					puts payload["data"]
+				end
 			else
 				#Else data is complete. It is just heading back to original source
 				return control_message_packet, {}
 			end
 			
 		else
+
+			$log.debug "Traceroute timeout #{(main_processor.node_time.to_f ) - control_message_packet.time_sent}"
+			#If the timeout is less than or equal to the current time - the time the packet was sent give a failure
+			if main_processor.timeout <= (main_processor.node_time.to_f ) - control_message_packet.time_sent
+				$log.debug "Traceroute timeout #{(main_processor.node_time.to_f ) - control_message_packet.time_sent}"
+				#Update hopcount
+				payload["HOPCOUNT"] = payload["HOPCOUNT"].to_i + 1
+
+				payload["data"] = "" # clear payload
+				payload["failure"] = true
+
+				#send back to host early
+				control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+				main_processor.source_ip, control_message_packet.source_name,
+				control_message_packet.source_ip, 0, "TRACEROUTE", payload, control_message_packet.time_sent)
+
+				control_message_packet.payload = payload
+				return control_message_packet, {}
+			end
+
 			#Get difference between last hop time and current time in milliseconds
 			hop_time = (main_processor.node_time * 1000).to_i - payload["last_hop_time"].to_i
 			hop_time.ceil
 
 			#Update hop time on payload in ms
-			payload["last_hop_time"] = hop_time
+			payload["last_hop_time"] = (main_processor.node_time.to_f * 1000).ceil
 
 			#Update hopcount
 			payload["HOPCOUNT"] = payload["HOPCOUNT"].to_i + 1
 
 			payload["data"] += "#{payload["HOPCOUNT"]} #{main_processor.source_hostname} #{hop_time}\n"
 
+
+
 			#Trace Route has reached destination. Send a new packet to original
 			#source with the same data but marked as completed
 			if control_message_packet.destination_name.eql? main_processor.source_hostname
 				payload["complete"] = true
+				#preserve original time sent
 				control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
 				main_processor.source_ip, control_message_packet.source_name,
-				control_message_packet.source_ip, 0, "TRACEROUTE", payload, main_processor.node_time)
+				control_message_packet.source_ip, 0, "TRACEROUTE", payload, control_message_packet.time_sent)
 
 			end
 

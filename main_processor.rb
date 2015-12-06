@@ -24,7 +24,7 @@ class MainProcessor
 
 	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table,
 	:flooding_utility, :weights_config_filepath, :nodes_config_filepath,
-	:routing_table_updating, :keys, :private_key, :public_key, :graph_mutex
+	:routing_table_updating, :keys, :private_key, :public_key, :graph_mutex, :timeout
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
@@ -97,6 +97,7 @@ class MainProcessor
 
 		# parse files to get network information
 		parse_config_file(@config_filepath)
+		@timeout = 1 #TODO read from config file
 		extract_ip_and_port(@weights_config_filepath, @nodes_config_filepath, @source_hostname)
 
 		#generate public and private keys
@@ -146,6 +147,7 @@ class MainProcessor
 	def update_time
 		loop {
 			@node_time += 0.001
+			#@node_time = Time.now.to_f 
 			sleep(0.001)
 		}
 	end

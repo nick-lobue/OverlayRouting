@@ -26,7 +26,7 @@ class Performer
 		payload['data'] = "0 #{main_processor.source_hostname} 0\n" #TODO hostname
 		#Starting hop time in milliseconds
 		payload["last_hop_time"] = (main_processor.node_time.to_f * 1000).ceil
-
+		payload["HOPCOUNT"] = 0
 		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
 				main_processor.source_ip, destination_name, nil, 0, "TRACEROUTE", payload,
 				main_processor.node_time)
