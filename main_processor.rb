@@ -100,7 +100,7 @@ class MainProcessor
 		extract_ip_and_port(@weights_config_filepath, @nodes_config_filepath, @source_hostname)
 
 		#generate public and private keys
-		@private_key = OpenSSL::PKey::RSA.new(4098)
+		@private_key = OpenSSL::PKey::RSA.new(2048)
 		@public_key = @private_key.public_key
 
 		#TODO get keys from lsp
@@ -265,6 +265,7 @@ class MainProcessor
 				next_hop_port = @port_hash[next_hop_hostname]
 
 				socket = TCPSocket.open(next_hop_ip, next_hop_port)
+
 
 				socket.puts(packet.to_json_from_cmp)
 

@@ -204,11 +204,32 @@ class Performer
 			tor_json = JSON.generate(payload["TOR"])
 			$log.debug "Tor: JSON #{tor_json.inspect}"
 
-			payload["TOR"] = Base64.encode64(main_processor.keys[next_hop].public_encrypt(tor_json))
+			#payload["TOR"] = Base64.encode64(main_processor.keys[next_hop].public_encrypt(tor_json))
+
+			#generate AES key and iv
+			cipher = OpenSSL::Cipher::AES128.new(:CBC)
+			cipher.encrypt
+			key = cipher.random_key
+			iv = cipher.random_iv
+			tor_encrypted = cipher.update(tor_json) + cipher.final
+
+			payload["TOR"] = Base64.encode64(tor_encrypted)
+
+		
+			hop_rsa_key = main_processor.keys[next_hop]
+			while hop_rsa_key.nil?
+				$log.debug "Waiting to receive RSA keys for #{next_hop}"
+				sleep 1
+				hop_rsa_key = main_processor.keys[next_hop]
+			end
+
+			#Encrypt aes key and iv so that only the receiver of this layer can decrypt
+			encrypted_key = Base64.encode64(hop_rsa_key.public_encrypt(key))
+			encrypted_iv = Base64.encode64(hop_rsa_key.public_encrypt(iv))
 
 			#A control message packet from hop to next_hop
 			cmp = ControlMessagePacket.new(hop,
-				nil, next_hop, nil, 0, "TOR", payload, 0)
+				nil, next_hop, nil, 0, "TOR", payload, 0, {'key' => encrypted_key, 'iv' => encrypted_iv})
 
 			#clear payload for next hop
 			payload = Hash.new

@@ -38,19 +38,30 @@ class ControlMessageHandler
 		key = main_processor.keys[main_processor.source_hostname]
 
 
-		tor_payload_encrypted = control_message_packet.payload["TOR"]
+		tor_payload_encrypted = Base64.decode64(control_message_packet.payload["TOR"])
 
 		#tor_payload_encrypted = JSON.parse control_message_packet.payload["TOR"]
 
-		#decrypt with own private key
-		tor_payload = main_processor.private_key.private_decrypt(Base64.decode64(tor_payload_encrypted))
+		#Get key and iv from uppermost layer using RSA private key
+		upper_layer_key = main_processor.private_key.private_decrypt(Base64.decode64(control_message_packet.encryption['key']))
+		upper_layer_iv = main_processor.private_key.private_decrypt(Base64.decode64(control_message_packet.encryption['iv']))
+
+		decipher = OpenSSL::Cipher::AES128.new(:CBC)
+		decipher.decrypt
+		decipher.key = upper_layer_key
+		decipher.iv = upper_layer_iv
+
+		#decrypt with own RSA private key
+
+		tor_payload = decipher.update(tor_payload_encrypted) + decipher.final
+		tor_payload = JSON.parse tor_payload
 
 		$log.debug "onions: \"#{tor_payload.inspect}\""
 
 		#payload = JSON.parse payload
 		if tor_payload["complete"] == true
 			#Arrived at destination
-			puts "Received onion message: \"#{payload["TOR"].inspect}\""
+			puts "Received onion message: \"#{tor_payload["message"]}\""
 		else
 			#Current hop is intermediate hop
 			#Unwrap lower cmp and forward
