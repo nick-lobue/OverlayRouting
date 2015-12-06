@@ -5,6 +5,10 @@ require_relative 'dijkstra_executor.rb'
 #Handles commands from the user e.g. TRACEROUTE, CHECKSTABLE, PING 
 class Performer
 
+	#TODO delete and use actual encryption
+	def self.encrypt(key, plain)
+		return plain
+	end
 
 	#returns packets to forward
 	def self.perform_traceroute(main_processor, destination_name)
@@ -152,7 +156,7 @@ class Performer
 		#TODO check if message is str
 
 		#e.g [n2, n3, n4]
-		path = DijkstraExecutor.find_path(main_processor.graph, main_processor, destination_name)
+		path = DijkstraExecutor.find_path(main_processor.flooding_utility.global_top, main_processor, destination_name)
 
 		if path.empty?
 			puts "No route found"
@@ -163,6 +167,7 @@ class Performer
 		path = path.reverse
 		path.push main_processor.source_hostname
 
+		$log.debug "TOR path #{path}"
 		#TODO replace cmp with second to last path
 		#passing fake node time to stay anonymous. 
 		#If I pass in the time someone could tell who I am by the difference.
@@ -172,7 +177,7 @@ class Performer
 
 		#The next hop in the series.
 		#initially it's self
-		next_hop = destination
+		next_hop = destination_name
 		next_hop_cmp = nil
 
 		#The last hop's payload will contain the message encrypted
@@ -180,6 +185,9 @@ class Performer
 		payload["TOR"] = Hash.new
 		payload["TOR"]["message"] = encrypt(main_processor.keys[destination_name], message)
 		payload["TOR"]["complete"] = true
+
+
+		cmp = nil
 
 		#itterate the path from reverse creating a control message packet where
 		#Only the next hop can decrypt
@@ -206,9 +214,11 @@ class Performer
 			next_hop_cmp = cmp
 			next_hop = hop
 		}
-
-
-		return cmp
+		if cmp.nil?
+			puts "TOR error: no path available"
+		else
+			return cmp
+		end
 	end
 
 	# ----------------------------------------------------------------

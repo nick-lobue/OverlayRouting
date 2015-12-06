@@ -6,6 +6,10 @@ require_relative 'control_msg_packet.rb'
 #Functions might return packets to add to forward_queue
 class ControlMessageHandler
 
+	#TODO delete and use actual encryption
+	def self.decrypt(key, plain)
+		return plain
+	end
 
 	def self.handle(main_processor, control_message_packet, optional_args=Hash.new)
 		$log.debug "Processing #{control_message_packet.inspect}"
@@ -18,6 +22,8 @@ class ControlMessageHandler
 		elsif cmp_type.eql? "FTP"
 			self.handle_ftp_cmp(main_processor, control_message_packet, optional_args)
 		elsif cmp_type.eql? "SND_MSG"
+			self.handle_send_message_cmp(main_processor, control_message_packet, optional_args)
+		elsif cmp_type.eql? "TOR"
 			self.handle_send_message_cmp(main_processor, control_message_packet, optional_args)
 		else
 			$log.warn "Control Message Type: #{cmp_type} not handled"
