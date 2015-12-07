@@ -1,6 +1,7 @@
 require 'time'
 require 'socket'
 require 'thread'
+require 'securerandom'
 
 require_relative 'packet.rb'
 require_relative 'link_state_packet.rb'
@@ -21,6 +22,7 @@ $debug = true #TODO set to false on submission
 # --------------------------------------------
 class MainProcessor
 
+
 	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table, :flooding_utility, :weights_config_filepath, :nodes_config_filepath, :routing_table_updating
 
 	# regex constants for user commands
@@ -31,6 +33,7 @@ class MainProcessor
 
 	TRACEROUTE = "^TRACEROUTE\s+(.+)$"
 	FTP = "^FTP\s+(.+)\s+(.+)\s+(.+)$"
+	PING = "^PING\s+(.+)\s+([0-9]+)\s+([0-9 | \.]+)$"
 	SEND_MESSAGE = "^SNDMSG\s+([0-9a-zA-Z\w]+)\s+(.+)$"
 	CLOCKSYNC = "^\s*CLOCKSYNC\s*$"
 
@@ -49,6 +52,10 @@ class MainProcessor
 				@weights_config_filepath = $1
 			elsif line =~ /\s*nodes\s*=\s*(.+)\s*/
 				@nodes_config_filepath = $1
+			elsif line =~ /\s*maxPacketSize\s*=\s*(.+)\s*/
+				@max_packet_size = $1
+			elsif line =~ /\s*pingTimeout\s*=\s*(.+)\s*/
+				@ping_timeout = $1
 			end
 		end
 	end
@@ -87,6 +94,7 @@ class MainProcessor
 			puts "Usage: ruby main_processor.rb [config file] [source hostname]"
 		end
 
+		@timeout_table = Hash.new
 		@node_time = Time.now.to_f
 		@config_filepath = arguments[0]
 		@source_hostname = arguments[1]
@@ -133,6 +141,38 @@ class MainProcessor
 		loop {
 			@node_time += 0.001
 			sleep(0.001)
+		}
+	end
+
+	# -------------------------------------------------
+	# Constantly updates the timeout table used at each
+	# node. Will delete the specific packet entry and 
+	# print a timeout message if the message has 
+	# outlived its lifespan
+	# -------------------------------------------------
+	def update_timeout_table
+		loop {
+			@timeout_table.each do |(key, type), (n_time, notified)|
+
+				# Check first if the id in the table has outlived its lifespan
+				if @node_time - n_time > @ping_timeout
+
+					# Check if the id in the table is more than 5 mins old.
+					# This is done to allow for a lag in clean up 
+					if @node_time - n_time > 5000
+						@timeout_table.delete([key, type])
+					else
+						if type == 'PING' && !notified
+							notified = true
+							puts "PING ERROR: HOST UNREACHABLE"
+						else 
+						# if type == traceroute
+						end
+					end
+				end
+			end
+
+			sleep(1)
 		}
 	end
 
@@ -381,6 +421,28 @@ class MainProcessor
 								@forward_queue << packet
 							else
 								$log.debug "Nothing to forward #{packet.class}"
+							end
+						}
+					elsif /#{PING}/.match(inputted_command)
+						dest_hostname = $1
+						num_pings = $2.to_i
+						delay = $3.to_f
+						Thread.new {
+							# Create the number of pings amount of pings
+							for i in 0..num_pings-1
+
+								# Unique id for this packet to store in the
+								# timeout table. A boolean is appended to
+								# keep track if a notification was written to 
+								# standard out or not
+								unique_id = SecureRandom.hex(8)
+								@timeout_table[['#{unique_id}', 'PING']] = [@node_time, false]
+
+								# Create packet
+								packet = Performer.perform_ping(self, dest_hostname, i, unique_id)
+
+								# Wait the time of the delay to send out the next ping
+								sleep(delay)
 							end
 						}
 					elsif /#{SEND_MESSAGE}/.match(inputted_command)

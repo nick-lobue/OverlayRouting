@@ -101,6 +101,30 @@ class Performer
 		control_message_packet
 	end
 
+	# -------------------------------------------------------------------
+	# Return the initial control message packet to be forwarded to the 
+	# destination included with a ping command
+	# -------------------------------------------------------------------
+	def self.perform_ping(main_processor, destination_name, seq_id, unique_id)
+		if destination_name.nil? or seq_id.nil? or unique_id.nil?
+			throw :invalid_argument
+		end
+
+		payload = Hash.new
+
+		# Start the sequence id at 0 initially
+		payload['SEQ_ID'] = seq_id
+
+		# Mark it with its unique_id
+		payload['unique_id'] = [unique_id, 'PING']
+
+		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+			main_processor.source_ip, destination_name, nil, 0, "PING", payload,
+			main_processor.node_time)
+
+		control_message_packet
+	end 
+
 	# --------------------------------------------------------------
 	# Perform the DUMPTABLE hook by going through the routing
 	# table's entries and writing the source host ip, destination
