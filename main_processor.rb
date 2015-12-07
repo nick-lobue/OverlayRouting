@@ -160,7 +160,7 @@ class MainProcessor
 					# Check if the id in the table is more than 5 mins old.
 					# This is done to allow for a lag in clean up 
 					if @node_time - n_time > 5000
-						@timeout_table[[key, type]].delete
+						@timeout_table.delete([key, type])
 					else
 						if type == 'PING' && !notified
 							notified = true

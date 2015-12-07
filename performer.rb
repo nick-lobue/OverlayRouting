@@ -113,7 +113,7 @@ class Performer
 		payload = Hash.new
 
 		# Start the sequence id at 0 initially
-		payload['SEQ_ID'] = seq_id.to_s
+		payload['SEQ_ID'] = seq_id
 
 		# Mark it with its unique_id
 		payload['unique_id'] = [unique_id, 'PING']
