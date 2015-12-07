@@ -215,7 +215,16 @@ class ControlMessageHandler
 		end
 	end
 
+	# ------------------------------------------------------------------------------
+	# This method will be used to handle advertise control message packets.
+	# It will propagate the message on to the next node it needs to go to while
+	# keeping track of the node it need to travel to next and the one it came 
+	# from. Each node will contain a table to keep track of all the nodes in the
+	# subscription. The key is the subscription id and the value is the list of
+	# nodes in the subscription.
+	# ------------------------------------------------------------------------------
 	def self.handle_advertise(main_processor, control_message_packet, optional_args)
+		destination_count = 0
 		payload = control_message_packet.payload
 
 		unless control_message_packet.destination_name.eql? main_processor.source_hostname
@@ -224,15 +233,70 @@ class ControlMessageHandler
 		end
 
 		if payload["complete"]
-
-		else
-			# If the packet is at one of its destinations 
-			if control_message_packet.destination_name.eql? main_processor.source_hostname
-				# Add unique id to subscription table in the main processor
-				main_processor.subscription_table[payload["unique_id"]] = payload["node_list"]
-
-				# Add current node to visited node list 
+			# Check if subscription is already in the table
+			if main_processor.subscription_table.include?(payload["unique_id"])
+				puts "ADVERTISE #{payload["unique_id"]}: CONSISTENCY FAULT #{main_processor.first_subscription_node_table[payload["unique_id"]]} ¿¿ #{payload["current"]}"
+				return nil
 			end
+
+			# Not in table first node that the packet came on
+			main_processor.subscription_table[payload["unique_id"]] = payload["node_list"]
+			main_processor.first_subscription_node_table[payload["unique_id"]] = payload["current"]
+
+			log.debug "Added subscription to subscription table: #{payload["unique_id"]} #{main_processor.subscription_table}"
+
+			puts "#{payload["node_list"].length} NODES #{payload["node_list"]} SUBSCRIBED TO #{payload["unique_id"]}"
+			return nil
+		else
+
+			# Add unique id to subscription table in the main processor
+			main_processor.subscription_table[payload["unique_id"]] = payload["node_list"]
+
+			# Add current node to visited node list
+			payload["visited"] << main_processor.source_name
+
+			# Record prev and current 
+			payload["prev"] = payload["current"]
+			payload["current"] = main_processor.source_hostname
+
+			# Check if the message has reach every node in the 
+			# ndoe list
+			if payload["visited"].length == payload["node_list"].length
+
+				# Record next node
+				payload["next"] = control_message_packet.source_name
+
+				payload["complete"] = true
+				control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+					main_processor.source_ip, control_message_packet.source_name,
+					control_message_packet.source_ip, 0, "ADVERTISE", payload, main_processor.node_time)
+
+				$log.debug "ADVERTISE heading back to source"
+
+				# Produce output for going back to source
+				puts "ADVERTISE: #{payload["unique_id"} #{payload["prev"]} --> #{payload["next"]}"
+			else
+				until !payload["node_list"][destination_count].eql?(main_processor.source_name) 
+					&& !payload["visited"].include?(payload["node_list"][destination_count])
+					destination_count += 1
+				end
+
+				# Recored next node
+				payload["next"] = payload["node_list"][destination_count]
+
+				control_message_packet = ControlMessagePacket.new(control_message_packet.source_hostname,
+					control_message_packet.source_ip, payload["node_list"][destination_count], 
+					nil, 0, "ADVERTISE", payload, main_processor.node_time)
+
+				$log.debug "ADVERTISE heading to #{payload["next"] came from payload["prev"]}"
+				
+				# Produce output for going to next
+				puts "ADVERTISE: #{payload["unique_id"} #{payload["prev"]} --> #{control_message_packet.source_name}"
+
+			end
+
+			control_message_packet.payload = payload
+			return control_message_packet, {}			
 		end
 	end
 end
