@@ -116,16 +116,16 @@ class Performer
 			payload["visited"] << main_processor.source_hostname
 
 			# Make a node a destination
-			if node_list[0].trim.eql?(main_processor.source_hostname)
-				first_destination = node_list[1].trim
+			if node_list[0].strip.eql?(main_processor.source_hostname)
+				first_destination = node_list[1].strip
 			else
-				first_destination = node_list[0].trim
+				first_destination = node_list[0].strip
 			end
 
 		# Else make the first node in the node list the first
 		# destination
 		else
-			first_destination = node_list[0].trim
+			first_destination = node_list[0].strip
 		end
 
 		# Set the previous, next, and current nodes

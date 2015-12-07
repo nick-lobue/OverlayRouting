@@ -20,6 +20,8 @@ class ControlMessageHandler
 			self.handle_ftp_cmp(main_processor, control_message_packet, optional_args)
 		elsif cmp_type.eql? "SND_MSG"
 			self.handle_send_message_cmp(main_processor, control_message_packet, optional_args)
+                elsif cmp_type.eql? "ADVERTISE"
+                        self.handle_advertise(main_processor, control_message_packet, optional_args)
 		else
 			$log.warn "Control Message Type: #{cmp_type} not handled"
 		end
@@ -260,7 +262,7 @@ class ControlMessageHandler
 			main_processor.subscription_table[payload["unique_id"]] = payload["node_list"]
 
 			# Add current node to visited node list
-			payload["visited"] << main_processor.source_name
+			payload["visited"] << main_processor.source_hostname
 
 			# Record prev and current 
 			payload["prev"] = payload["current"]
@@ -288,8 +290,7 @@ class ControlMessageHandler
 				puts "ADVERTISE: #{unique_id} #{prev} --> #{next_node}"
 
 			else
-				until !payload["node_list"][destination_count].eql?(main_processor.source_name) 
-					&& !payload["visited"].include?(payload["node_list"][destination_count])
+				until !payload["node_list"][destination_count].eql?(main_processor.source_hostname) && !(payload["visited"].include?(payload["node_list"][destination_count]))
 					destination_count += 1
 				end
 
@@ -297,7 +298,7 @@ class ControlMessageHandler
 				payload["next"] = payload["node_list"][destination_count]
 				next_node = payload["next"]
 
-				control_message_packet = ControlMessagePacket.new(control_message_packet.source_hostname,
+				control_message_packet = ControlMessagePacket.new(control_message_packet.source_name,
 					control_message_packet.source_ip, payload["node_list"][destination_count], 
 					nil, 0, "ADVERTISE", payload, main_processor.node_time)
 

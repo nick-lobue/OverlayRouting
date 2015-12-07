@@ -218,7 +218,7 @@ class MainProcessor
 				if next_hop_route_entry.nil?
 
                                   @routing_table_mutex.synchronize {
-					next_hop_route_entry = @routing_table[packet.source_hostname]
+					next_hop_route_entry = @routing_table[packet.source_name]
                 }
 
 					if next_hop_route_entry.nil? and packet.retries < 6
@@ -241,8 +241,8 @@ class MainProcessor
 						#We could continue retrying
 						#TODO maybe
 						Thread.new {
-							$log.error "No next route for #{packet.source_hostname} or
-							#{packet.destination_hostname} for packet: #{packet.inspect}"
+							$log.error "No next route for #{packet.source_name} or
+							#{packet.destination_name} for packet: #{packet.inspect}"
 							sleep 1
 							packet.failures = packet.failures + 1
 							@forward_queue << packet
@@ -402,7 +402,7 @@ class MainProcessor
 							end
 						}
 					elsif /#{ADVERTISE}/.match(inputted_command)
-						subscriptionId = $1
+						unique_id = $1
 						node_list = $2
 
 						Thread.new {
