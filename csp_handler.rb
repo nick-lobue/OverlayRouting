@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 require 'base64'
 
 require_relative 'control_msg_packet.rb'
@@ -226,6 +227,8 @@ class ControlMessageHandler
 	def self.handle_advertise(main_processor, control_message_packet, optional_args)
 		destination_count = 0
 		payload = control_message_packet.payload
+		unique_id = payload["unique_id"]
+		node_list = payload["node_list"]
 
 		unless control_message_packet.destination_name.eql? main_processor.source_hostname
 			#packet is not for this node and we have nothing to add. Just forward it along.
@@ -233,9 +236,12 @@ class ControlMessageHandler
 		end
 
 		if payload["complete"]
+
+			prev = payload["current"]
 			# Check if subscription is already in the table
 			if main_processor.subscription_table.include?(payload["unique_id"])
-				puts "ADVERTISE #{payload["unique_id"]}: CONSISTENCY FAULT #{main_processor.first_subscription_node_table[payload["unique_id"]]} ¿¿ #{payload["current"]}"
+				puts "ADVERTISE #{unique_id}: CONSISTENCY FAULT #{main_processor.first_subscription_node_table[unique_id]} ¿¿ #{prev}"
+
 				return nil
 			end
 
@@ -243,9 +249,10 @@ class ControlMessageHandler
 			main_processor.subscription_table[payload["unique_id"]] = payload["node_list"]
 			main_processor.first_subscription_node_table[payload["unique_id"]] = payload["current"]
 
-			log.debug "Added subscription to subscription table: #{payload["unique_id"]} #{main_processor.subscription_table}"
 
-			puts "#{payload["node_list"].length} NODES #{payload["node_list"]} SUBSCRIBED TO #{payload["unique_id"]}"
+			log.debug "Added subscription to subscription table: #{unique_id} #{main_processor.subscription_table}"
+
+			puts "#{node_list.length} NODES #{node_list} SUBSCRIBED TO #{unique_id}"
 			return nil
 		else
 
@@ -273,8 +280,13 @@ class ControlMessageHandler
 
 				$log.debug "ADVERTISE heading back to source"
 
+
+				prev = payload["prev"]
+				next_node = payload["next"]
+
 				# Produce output for going back to source
-				puts "ADVERTISE: #{payload["unique_id"} #{payload["prev"]} --> #{payload["next"]}"
+				puts "ADVERTISE: #{unique_id} #{prev} --> #{next_node}"
+
 			else
 				until !payload["node_list"][destination_count].eql?(main_processor.source_name) 
 					&& !payload["visited"].include?(payload["node_list"][destination_count])
@@ -283,15 +295,18 @@ class ControlMessageHandler
 
 				# Recored next node
 				payload["next"] = payload["node_list"][destination_count]
+				next_node = payload["next"]
 
 				control_message_packet = ControlMessagePacket.new(control_message_packet.source_hostname,
 					control_message_packet.source_ip, payload["node_list"][destination_count], 
 					nil, 0, "ADVERTISE", payload, main_processor.node_time)
 
-				$log.debug "ADVERTISE heading to #{payload["next"] came from payload["prev"]}"
+
+				$log.debug "ADVERTISE heading to #{next_node} came from #{prev}"
 				
 				# Produce output for going to next
-				puts "ADVERTISE: #{payload["unique_id"} #{payload["prev"]} --> #{control_message_packet.source_name}"
+				puts "ADVERTISE: #{unique_id} #{prev} --> #{control_message_packet.source_name}"
+
 
 			end
 
