@@ -215,8 +215,19 @@ class ControlMessageHandler
 		end
 	end
 
+	# ------------------------------------------------------------------------------
+	# This method will be used to handle advertise control message packets.
+	# It will propagate the message on to the next node it needs to go to while
+	# keeping track of the node it need to travel to next and the one it came 
+	# from. Each node will contain a table to keep track of all the nodes in the
+	# subscription. The key is the subscription id and the value is the list of
+	# nodes in the subscription.
+	# ------------------------------------------------------------------------------
 	def self.handle_advertise(main_processor, control_message_packet, optional_args)
+		destination_count = 0
 		payload = control_message_packet.payload
+		unique_id = payload["unique_id"]
+		node_list = payload["node_list"]
 
 		unless control_message_packet.destination_name.eql? main_processor.source_hostname
 			#packet is not for this node and we have nothing to add. Just forward it along.
@@ -224,15 +235,75 @@ class ControlMessageHandler
 		end
 
 		if payload["complete"]
-
-		else
-			# If the packet is at one of its destinations 
-			if control_message_packet.destination_name.eql? main_processor.source_hostname
-				# Add unique id to subscription table in the main processor
-				main_processor.subscription_table[payload["unique_id"]] = payload["node_list"]
-
-				# Add current node to visited node list 
+			prev = payload["current"]
+			# Check if subscription is already in the table
+			if main_processor.subscription_table.include?(payload["unique_id"])
+				puts "ADVERTISE #{unique_id}: CONSISTENCY FAULT #{main_processor.first_subscription_node_table[unique_id]} ¿¿ #{prev}"
+				return nil
 			end
+
+			# Not in table first node that the packet came on
+			main_processor.subscription_table[payload["unique_id"]] = payload["node_list"]
+			main_processor.first_subscription_node_table[payload["unique_id"]] = payload["current"]
+
+			log.debug "Added subscription to subscription table: #{unique_id} #{main_processor.subscription_table}"
+
+			puts "#{node_list.length} NODES #{node_list} SUBSCRIBED TO #{unique_id}"
+			return nil
+		else
+
+			# Add unique id to subscription table in the main processor
+			main_processor.subscription_table[payload["unique_id"]] = payload["node_list"]
+
+			# Add current node to visited node list
+			payload["visited"] << main_processor.source_name
+
+			# Record prev and current 
+			payload["prev"] = payload["current"]
+			payload["current"] = main_processor.source_hostname
+
+			# Check if the message has reach every node in the 
+			# ndoe list
+			if payload["visited"].length == payload["node_list"].length
+
+				# Record next node
+				payload["next"] = control_message_packet.source_name
+
+				payload["complete"] = true
+				control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+					main_processor.source_ip, control_message_packet.source_name,
+					control_message_packet.source_ip, 0, "ADVERTISE", payload, main_processor.node_time)
+
+				$log.debug "ADVERTISE heading back to source"
+
+				prev = payload["prev"]
+				next_node = payload["next"]
+
+				# Produce output for going back to source
+				puts "ADVERTISE: #{unique_id} #{prev} --> #{next_node}"
+			else
+				until !payload["node_list"][destination_count].eql?(main_processor.source_name) 
+					&& !payload["visited"].include?(payload["node_list"][destination_count])
+					destination_count += 1
+				end
+
+				# Recored next node
+				payload["next"] = payload["node_list"][destination_count]
+				next_node = payload["next"]
+
+				control_message_packet = ControlMessagePacket.new(control_message_packet.source_hostname,
+					control_message_packet.source_ip, payload["node_list"][destination_count], 
+					nil, 0, "ADVERTISE", payload, main_processor.node_time)
+
+				$log.debug "ADVERTISE heading to #{next_node} came from #{prev}"
+				
+				# Produce output for going to next
+				puts "ADVERTISE: #{unique_id} #{prev} --> #{control_message_packet.source_name}"
+
+			end
+
+			control_message_packet.payload = payload
+			return control_message_packet, {}			
 		end
 	end
 end

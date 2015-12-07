@@ -88,25 +88,51 @@ class Performer
 			throw :invalid_argument
 		end
 
+		# Check if the only node in the node list is self
+		if node_list.length == 1 && main_processor.source_hostname.eql?(node_list[0])
+			main_processor.subscription_table[unique_id] = node_list
+			puts "1 NODE #{node_list[0]} SUBSCRIBED TO #{unique_id}"
+			reutrn nil
+		end
+
 		payload = Hash.new
-
-		# add first node in the node list to the desination
-		# and mark it as visited
-		first_destination = node_list[0].trim
-
 
 		# add unique subscription id and 
 		# rest of node list to payload
 		payload["unique_id"] = unique_id
 
-		# Send node list as string to minimize
-		# serialization issues
-		payload["node_list"] = node_list.to_s
+		# Send node list 
+		payload["node_list"] = node_list
 
 		# Use visited nodes list to determine
 		# which nodes in the nodes list has
 		# already been visited
 		payload["visited"] = Array.new
+
+		# Check if the current node should
+		# be part of the subscription
+		# Add it to table and visited if it is
+		if node_list.include?(main_processor.source_hostname)
+			payload["visited"] << main_processor.source_hostname
+
+			# Make a node a destination
+			if node_list[0].trim.eql?(main_processor.source_hostname)
+				first_destination = node_list[1].trim
+			else
+				first_destination = node_list[0].trim
+			end
+
+		# Else make the first node in the node list the first
+		# destination
+		else
+			first_destination = node_list[0].trim
+		end
+
+		# Set the previous, next, and current nodes
+		# in the payload
+		payload["prev"] = nil
+		payload["current"] = main_processor.source_hostname
+		payload["next"] = first_destination
 
 		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
 				main_processor.source_ip, first_destination, nil, 0, "ADVERTISE", payload, main_processor.node_time)
