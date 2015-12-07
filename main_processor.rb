@@ -32,6 +32,7 @@ class MainProcessor
 	TRACEROUTE = "^TRACEROUTE\s+(.+)$"
 	FTP = "^FTP\s+(.+)\s+(.+)\s+(.+)$"
 	SEND_MESSAGE = "^SNDMSG\s+([0-9a-zA-Z\w]+)\s+(.+)$"
+	CLOCKSYNC = "^\s*CLOCKSYNC\s*$"
 
 
 	# ------------------------------------------------------
@@ -212,9 +213,9 @@ class MainProcessor
 				#If hop does not exist forward back to original node
 				if next_hop_route_entry.nil?
 
-                                  @routing_table_mutex.synchronize {
-					next_hop_route_entry = @routing_table[packet.source_hostname]
-                }
+                    @routing_table_mutex.synchronize {
+						next_hop_route_entry = @routing_table[packet.source_name]
+                	}
 
 					if next_hop_route_entry.nil? and packet.retries < 6
 						#Weird case source and destination can not be found
@@ -257,7 +258,12 @@ class MainProcessor
 
 				#TODO handle this. Could mean link or node is down
 				#TODO test if this handles links that are down.
-				$log.warn "Conection refused to #{neighbor_ip}:#{@port} will \
+				next_hop_route_entry = nil
+				@routing_table_mutex.synchronize {
+					next_hop_route_entry = @routing_table[packet.destination_name]
+				}
+
+				$log.warn "Connection refused to #{next_hop_route_entry}:#{@port_hash[next_hop_route_entry.next_hop.hostname]} will \
 				append to end of forward queue and try again later retry"
 
 				#Push to end of queue to try again later
@@ -388,6 +394,22 @@ class MainProcessor
 							else
 								$log.debug "Nothing to forward #{packet.class}"
 							end
+						}
+					elsif /#{CLOCKSYNC}/.match(inputted_command)
+						Thread.new {
+							@flooding_utility.link_state_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
+								packet = Performer.perform_clocksync(self, neighbor_name)
+
+								if packet.class.to_s.eql? "ControlMessagePacket"
+									@forward_queue << packet
+								else
+									$log.debug "Nothing to forward #{packet.class}"
+								end
+							end
+						}
+					elsif /PRINT_TIME/.match(inputted_command)
+						Thread.new {
+							puts("Current Node Time:  #{Time.at(@node_time)}")
 						}
 					else
 						$log.debug "Did not match anything. Input: #{inputted_command}"
