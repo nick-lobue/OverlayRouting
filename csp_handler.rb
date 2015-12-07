@@ -19,6 +19,10 @@ class ControlMessageHandler
 			self.handle_ftp_cmp(main_processor, control_message_packet, optional_args)
 		elsif cmp_type.eql? "PING"
 			self.handle_ping_cmp(main_processor, control_message_packet, optional_args)
+		elsif cmp_type.eql? "SND_MSG"
+			self.handle_send_message_cmp(main_processor, control_message_packet, optional_args)
+		elsif cmp_type.eql? "CLOCKSYNC"
+			self.handle_clocksync_cmp(main_processor, control_message_packet, optional_args)
 		else
 			$log.warn "Control Message Type: #{cmp_type} not handled"
 		end
@@ -230,6 +234,101 @@ class ControlMessageHandler
 		end
 	end
 
+	# -----------------------------------------------------------
+	# Reconstructs a control message packet according to the
+	# current node that it is on. Returns nil if the packet has
+	# gotten back to its origin, otherwise it returns the
+	# changed control message packet.
+	# -----------------------------------------------------------
+	def self.handle_send_message_cmp(main_processor, control_message_packet, optional_args)
+		payload = control_message_packet.payload
+
+		if payload["complete"]
+			# if the packet has made a round trip, determine if it was a success or
+			# not and print the corresponding messages
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
+				if payload["failure"]
+					$log.debug "SendMessage got back to the source but failed to fully send to recipient, payload: #{payload.inspect}"
+					puts "SENDMSG ERROR: #{control_message_packet.source_name} UNREACHABLE"
+				end
+			else
+				# hasn't gotten back to source yet, so return packet so that it'll be forwarded
+				return control_message_packet, {}
+			end
+		else
+			# arrived at the destination, send back to source node so that the source can 
+			# confirm if the message was fully received by inspecting the presence of
+			# the failure key in the payload hash
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
+				if payload["size"].to_i != payload["message"].size
+					payload["failure"] = true
+				else
+					$log.debug "SendMessage got to the destination successfully, payload: #{payload.inspect}"
+					puts("SENDMSG: #{control_message_packet.source_name} --> " + payload["message"])
+				end
+
+				payload["complete"] = true
+				control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+				main_processor.source_ip, control_message_packet.source_name,
+				control_message_packet.source_ip, 0, "SND_MSG", payload, main_processor.node_time)
+			end
+
+			control_message_packet.payload = payload
+			return control_message_packet, {}
+		end
+	end
+
+	# -----------------------------------------------------------
+	# Reconstructs a control message packet according to the
+	# current node that it is on. Returns nil if the packet has
+	# gotten back to its origin, otherwise it returns the
+	# changed control message packet. Saves node time in
+	# payload and sends back to source if at destination.
+	# -----------------------------------------------------------
+	def self.handle_clocksync_cmp(main_processor, control_message_packet, optional_args)
+		payload = control_message_packet.payload
+
+		if payload["destination_time"]
+			# determine if packet has made a round trip
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
+				$log.debug "CLOCKSYNC has made a full round trip."
+				round_trip_time = (Time.at(main_processor.node_time) - Time.at(control_message_packet.time_sent)) / 2
+
+				# determine if this node's time needs to be synced 
+				needs_syncing = Time.at(main_processor.node_time) <=> Time.at(payload["destination_time"] + round_trip_time)
+				if needs_syncing == -1
+					delta = (payload["destination_time"] + round_trip_time - main_processor.node_time)
+					main_processor.node_time = payload["destination_time"] + round_trip_time
+
+					$log.debug "Node's (#{main_processor.source_hostname}) time is behind node (#{control_message_packet.source_name}) and is being synced."
+					puts Time.at(main_processor.node_time).strftime("CLOCKSYNC: TIME = %H:%M:%S DELTA = #{delta}")
+				else
+					$log.debug "Node's (#{main_processor.source_hostname}) time is ahead of node (#{control_message_packet.source_name}) and should NOT be synced."
+				end
+
+				return nil, {}  # return nil because packet has made a round trip
+			else
+				# hasn't gotten back to source yet, so return packet so that it'll be forwarded
+				return control_message_packet, {}
+			end
+		else
+			# arrived at the destination, send back to source node so that the source can 
+			# sync its node time if need be
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
+				$log.debug "CLOCKSYNC got to the destination (#{main_processor.source_hostname} successfully.)"
+				puts Time.at(main_processor.node_time).strftime("CLOCKSYNC FROM #{control_message_packet.source_name}: TIME = %H:%M:%S")
+
+				payload["destination_time"] = main_processor.node_time
+				control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+				main_processor.source_ip, control_message_packet.source_name,
+				control_message_packet.source_ip, 0, "CLOCKSYNC", payload, control_message_packet.time_sent)
+			end
+
+			control_message_packet.payload = payload
+			return control_message_packet, {}
+		end
+	end
+
 	# ----------------------------------------------------------
 	# Helper method used to determine if a packet has timed
 	# out or not. Does this by comparing the node's time
@@ -238,4 +337,5 @@ class ControlMessageHandler
 	def has_timed_out(main_processor, packet_time)
 		return main_processor.node_time - packet_time > main_processor.ping_timeout 
 	end
+
 end

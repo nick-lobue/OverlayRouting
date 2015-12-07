@@ -1,6 +1,6 @@
 require 'set'
 require 'logger'
-require 'pry'
+
 
 if $log.nil?
   #main_processor.rb did not call this. In this case create global logger

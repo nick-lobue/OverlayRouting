@@ -22,7 +22,8 @@ $debug = true #TODO set to false on submission
 # --------------------------------------------
 class MainProcessor
 
-	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :timeout_table, :ping_timeout
+
+	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table, :flooding_utility, :weights_config_filepath, :nodes_config_filepath, :routing_table_updating
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
@@ -33,6 +34,8 @@ class MainProcessor
 	TRACEROUTE = "^TRACEROUTE\s+(.+)$"
 	FTP = "^FTP\s+(.+)\s+(.+)\s+(.+)$"
 	PING = "^PING\s+(.+)\s+([0-9]+)\s+([0-9 | \.]+)$"
+	SEND_MESSAGE = "^SNDMSG\s+([0-9a-zA-Z\w]+)\s+(.+)$"
+	CLOCKSYNC = "^\s*CLOCKSYNC\s*$"
 
 
 	# ------------------------------------------------------
@@ -44,7 +47,7 @@ class MainProcessor
 	def parse_config_file(config_filepath)
 		File.open(config_filepath).each do |line|
 			if line =~ /\s*updateInterval\s*=\s*(\d+)\s*/
-				@update_interval = $1
+				@update_interval = $1.to_f
 			elsif line =~ /\s*weightFile\s*=\s*(.+)\s*/
 				@weights_config_filepath = $1
 			elsif line =~ /\s*nodes\s*=\s*(.+)\s*/
@@ -250,7 +253,9 @@ class MainProcessor
 				#If hop does not exist forward back to original node
 				if next_hop_route_entry.nil?
 
-					next_hop_route_entry = @routing_table[packet.source_hostname]
+                    @routing_table_mutex.synchronize {
+						next_hop_route_entry = @routing_table[packet.source_name]
+                	}
 
 					if next_hop_route_entry.nil? and packet.retries < 6
 						#Weird case source and destination can not be found
@@ -293,7 +298,12 @@ class MainProcessor
 
 				#TODO handle this. Could mean link or node is down
 				#TODO test if this handles links that are down.
-				$log.warn "Conection refused to #{neighbor_ip}:#{@port} will \
+				next_hop_route_entry = nil
+				@routing_table_mutex.synchronize {
+					next_hop_route_entry = @routing_table[packet.destination_name]
+				}
+
+				$log.warn "Connection refused to #{next_hop_route_entry}:#{@port_hash[next_hop_route_entry.next_hop.hostname]} will \
 				append to end of forward queue and try again later retry"
 
 				#Push to end of queue to try again later
@@ -343,6 +353,22 @@ class MainProcessor
 		}
 	end
 
+	# ----------------------------------------------------
+	# Sleeps for however long the update interval
+	# specifies, then updates the routing table by
+	# calling forceupdate method. This function will be
+	# called in its own thread.
+	# ----------------------------------------------------
+	def recurring_routing_table_update
+		loop {
+			sleep(@update_interval)
+            @routing_table_mutex.synchronize {
+            	$log.debug "Attempting to perform a recurring routing table update."
+				Performer.perform_forceupdate(self)
+            }
+		}
+	end
+
 
 
 
@@ -357,7 +383,8 @@ class MainProcessor
 					Thread.new { control_message_listener }, 
 					Thread.new { packet_listener },
 					Thread.new { link_state_packet_processor },
-					Thread.new { packet_forwarder } ]
+					Thread.new { packet_forwarder },
+					Thread.new { recurring_routing_table_update } ]
 
 		loop {
 
@@ -367,13 +394,13 @@ class MainProcessor
 				if inputted_command != nil && inputted_command != ""
 					if /#{DUMPTABLE}/.match(inputted_command)
 						filename = $1 #passing in $1 directly passes nil for some reason
-						Thread.new { Performer.perform_dumptable(filename) }
+						Thread.new { Performer.perform_dumptable(self, filename) }
 					elsif /#{FORCEUPDATE}/.match(inputted_command)
-						Thread.new { Performer.perform_forceupdate }
+						Thread.new { Performer.perform_forceupdate(self) }
 					elsif /#{CHECKSTABLE}/.match(inputted_command)
-						Thread.new { Performer.perform_checkstable }
+						Thread.new { Performer.perform_checkstable(self) }
 					elsif /#{SHUTDOWN}/.match(inputted_command)
-						Thread.new { Performer.perform_shutdown }
+						Thread.new { Performer.perform_shutdown(self) }
 					elsif /#{TRACEROUTE}/.match(inputted_command)
 						hostname = $1
 						Thread.new {
@@ -414,18 +441,41 @@ class MainProcessor
 								# Create packet
 								packet = Performer.perform_ping(self, dest_hostname, i, unique_id)
 
+								# Wait the time of the delay to send out the next ping
+								sleep(delay)
+							end
+						}
+					elsif /#{SEND_MESSAGE}/.match(inputted_command)
+						destination = $1
+						message = $2
+
+						Thread.new {
+							packet = Performer.perform_send_message(self, destination, message)
+							if packet.class.to_s.eql? "ControlMessagePacket"
+								@forward_queue << packet
+							else
+								$log.debug "Nothing to forward #{packet.class}"
+							end
+						}
+					elsif /#{CLOCKSYNC}/.match(inputted_command)
+						Thread.new {
+							@flooding_utility.link_state_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
+								packet = Performer.perform_clocksync(self, neighbor_name)
+
 								if packet.class.to_s.eql? "ControlMessagePacket"
 									@forward_queue << packet
 								else
 									$log.debug "Nothing to forward #{packet.class}"
 								end
-
-								# Wait the time of the delay to send out the next ping
-								sleep(delay)
 							end
-						} 
-					end 
-						
+						}
+					elsif /PRINT_TIME/.match(inputted_command)
+						Thread.new {
+							puts("Current Node Time:  #{Time.at(@node_time)}")
+						}
+					else
+						$log.debug "Did not match anything. Input: #{inputted_command}"
+					end
 				end
 		}
 
