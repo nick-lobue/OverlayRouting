@@ -21,7 +21,7 @@ $debug = true #TODO set to false on submission
 # --------------------------------------------
 class MainProcessor
 
-	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table, :flooding_utility, :weights_config_filepath, :nodes_config_filepath, :routing_table_updating
+	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table, :flooding_utility, :weights_config_filepath, :nodes_config_filepath, :routing_table_updating, :subscription_table
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
@@ -32,6 +32,7 @@ class MainProcessor
 	TRACEROUTE = "^TRACEROUTE\s+(.+)$"
 	FTP = "^FTP\s+(.+)\s+(.+)\s+(.+)$"
 	SEND_MESSAGE = "^SNDMSG\s+([0-9a-zA-Z\w]+)\s+(.+)$"
+	ADVERTISE = "^ADVERTISE\s+([0-9a-zA-Z]+)\s+([[0-9a-zA-Z]+[,\s*]*]*)$"
 
 
 	# ------------------------------------------------------
@@ -109,6 +110,9 @@ class MainProcessor
 
 		#Create initial blank routing table
 		@routing_table = RoutingTable.blank_routing_table(@source_hostname, @source_ip)
+
+		#Create initial subscription table
+		@subscription_table = Hash.new
 
 		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip, @port_hash, @weights_config_filepath)
 
@@ -396,6 +400,18 @@ class MainProcessor
 								$log.debug "Nothing to forward #{packet.class}"
 							end
 						}
+					elsif /#{ADVERTISE}/.match(inputted_command)
+						subscriptionId = $1
+						node_list = $2
+
+						Thread.new {
+							packet = Performer.perform_advertise(self, unique_id, node_list.split(','))
+							if packet.class.to_s.eql? "ControlMessagePacket"
+								@forward_queue << packet
+							else
+								$log.debug "Nothing to forward #{packet.class}"
+							end
+						}		
 					else
 						$log.debug "Did not match anything. Input: #{inputted_command}"
 					end

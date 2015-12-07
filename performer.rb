@@ -78,6 +78,42 @@ class Performer
 		control_message_packet
 	end
 
+	# -----------------------------------------------------------
+	# Construct initial packet that will be sent to the given
+	# nodes in the node list and the nodes will be added to the 
+	# subscription group 
+	# -----------------------------------------------------------
+	def self.perform_advertise(main_processor, unique_id, node_list) 
+		if main_processor.nil? or unique_id.nil? or node_list.nil?
+			throw :invalid_argument
+		end
+
+		payload = Hash.new
+
+		# add first node in the node list to the desination
+		# and mark it as visited
+		first_destination = node_list[0].trim
+
+
+		# add unique subscription id and 
+		# rest of node list to payload
+		payload["unique_id"] = unique_id
+
+		# Send node list as string to minimize
+		# serialization issues
+		payload["node_list"] = node_list.to_s
+
+		# Use visited nodes list to determine
+		# which nodes in the nodes list has
+		# already been visited
+		payload["visited"] = Array.new
+
+		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+				main_processor.source_ip, first_destination, nil, 0, "ADVERTISE", payload, main_processor.node_time)
+
+		control_message_packet		
+	end
+
 	# --------------------------------------------------------------
 	# Perform the DUMPTABLE hook by going through the routing
 	# table's entries and writing the source host ip, destination

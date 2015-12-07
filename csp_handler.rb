@@ -214,4 +214,25 @@ class ControlMessageHandler
 			return control_message_packet, {}
 		end
 	end
+
+	def self.handle_advertise(main_processor, control_message_packet, optional_args)
+		payload = control_message_packet.payload
+
+		unless control_message_packet.destination_name.eql? main_processor.source_hostname
+			#packet is not for this node and we have nothing to add. Just forward it along.
+			return control_message_packet, {}
+		end
+
+		if payload["complete"]
+
+		else
+			# If the packet is at one of its destinations 
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
+				# Add unique id to subscription table in the main processor
+				main_processor.subscription_table[payload["unique_id"]] = payload["node_list"]
+
+				# Add current node to visited node list 
+			end
+		end
+	end
 end
