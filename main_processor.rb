@@ -27,7 +27,7 @@ class MainProcessor
 
 	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table, 
 		:flooding_utility, :weights_config_filepath, :nodes_config_filepath, :routing_table_updating,
-		:keys, :private_key, :public_key, :graph_mutex, :timeout
+		:keys, :private_key, :public_key, :graph_mutex, :ping_timeout
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
@@ -51,6 +51,7 @@ class MainProcessor
 	# ------------------------------------------------------
 	def parse_config_file(config_filepath)
 		File.open(config_filepath).each do |line|
+			$log.info line
 			if line =~ /\s*updateInterval\s*=\s*(\d+)\s*/
 				@update_interval = $1.to_f
 			elsif line =~ /\s*weightFile\s*=\s*(.+)\s*/
@@ -109,7 +110,7 @@ class MainProcessor
 
 		# parse files to get network information
 		parse_config_file(@config_filepath)
-		@timeout = 1 #TODO read from config file
+		
 		extract_ip_and_port(@weights_config_filepath, @nodes_config_filepath, @source_hostname)
 
 		#generate public and private keys
@@ -375,25 +376,28 @@ class MainProcessor
 						#Give 5 attempts before giving up
 						Thread.new {
 							$log.error "No next route for #{packet.source_name} or
-							#{packet.destination_hostname} for packet: #{packet.inspect}"
+							#{packet.destination_name} for packet: #{packet.inspect}"
 							sleep 1
-							packet.failures = packet.failures + 1
+							packet.retries += 1
 							@forward_queue << packet
 						}
+						
 					elsif next_hop_route_entry.nil?
-	
+						$log.debug "Handle no next route and retry limit reached"
 					else
 						#TODO send back to parent maybe talk to Nick and Tyler about this
 						#We could continue retrying
 						#TODO maybe
 						Thread.new {
+							#Statement below doesn't seem right
 							$log.error "No next route for #{packet.source_name} or
-							#{packet.destination_hostname} for packet: #{packet.inspect}"
+							#{packet.destination_name} for packet: #{packet.inspect}"
 							sleep 1
-							packet.failures = packet.failures + 1
+							packet.retries += 1
 							@forward_queue << packet
 						}
 					end
+					next
 				end
 
 				#TODO create mutex for routing table and maybe port_hash
@@ -406,16 +410,16 @@ class MainProcessor
 
 				
 				#fragment if not already fragmented and if the payload string is greater than
-				if not packet.fragInfo["fragmented"] and packet.payload.to_json.size >= @maxPacketSize
+				if not packet.fragInfo["fragmented"] and packet.payload.to_json.size >= @max_packet_size
 					$log.debug "Fragmenting"
 					
 
 					payload_json_str = packet.payload.to_json
 					fragId = 1
 
-					#Break payload into chunks of @maxPacketSize and create a
+					#Break payload into chunks of @max_packet_size and create a
 					#new control message packet for each segment
-					payload_chunk_arr_arr = payload_json_str.chars.to_a.each_slice(@maxPacketSize).to_a
+					payload_chunk_arr_arr = payload_json_str.chars.to_a.each_slice(@max_packet_size).to_a
 					payload_chunk_arr_arr.each_with_index.map {|payload_chunk_arr, index|
 						payload_chunk = payload_chunk_arr.join
 
@@ -458,11 +462,11 @@ class MainProcessor
 			rescue Errno::ECONNREFUSED => e
 				next_hop = "No next hop"
 				if not next_hop_route_entry.nil?
-					next_hop = 
+					next_hop = next_hop_route_entry.next_hop.hostname
 				end
 				#TODO handle this. Could mean link or node is down
 				#TODO test if this handles links that are down.
-				$log.warn "Conection refused to #{next_hop.next_hop.hostname} will \
+				$log.warn "Conection refused to #{next_hop} will \
 				append to end of forward queue and try again later retry"
 
 				#Push to end of queue to try again later
