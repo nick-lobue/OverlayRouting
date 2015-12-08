@@ -421,7 +421,7 @@ class MainProcessor
 				
 				#fragment if not already fragmented and if the payload string is greater than
 				fragment = false #TODO fix fragmentation issue and enable
-				if not packet.fragInfo["fragmented"] and packet.payload.to_json.size >= @max_packet_size and fragment
+				if fragment and not(packet.fragInfo["fragmented"]) and packet.payload.to_json.size >= @max_packet_size
 					$log.debug "Fragmenting"
 					
 
