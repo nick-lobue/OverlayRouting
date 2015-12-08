@@ -1,3 +1,4 @@
+# encoding: UTF-8
 require 'base64'
 require 'json'
 require 'openssl'
