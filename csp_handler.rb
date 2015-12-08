@@ -45,7 +45,7 @@ class ControlMessageHandler
 		if payload["complete"]
 			if control_message_packet.destination_name.eql? main_processor.source_hostname
 				$log.debug "Traceroute arrived back #{payload.inspect}"
-				puts payload["data"]
+				$stderr.puts payload["data"]
 			else
 				#Else data is complete. It is just heading back to original source
 				return control_message_packet, {}
@@ -94,7 +94,7 @@ class ControlMessageHandler
 		end
 
 		if payload["failure"]
-			puts "FTP: ERROR: #{payload["file_name"]} --> #{control_message_packet.source_name} INTERRUPTED AFTER #{payload["bytes_written"]}"
+			$stderr.puts "FTP: ERROR: #{payload["file_name"]} --> #{control_message_packet.source_name} INTERRUPTED AFTER #{payload["bytes_written"]}"
 		elsif payload["complete"]
 			#TODO handle Returned FTP complete. Packet back at source to handle
 			$log.debug "TODO FTP packet arrived back #{payload.inspect}"
@@ -111,7 +111,7 @@ class ControlMessageHandler
 				#probably a 0 as time just use 0 as the speed then
 			end
 
-			puts "FTP: #{payload["file_name"]} --> #{control_message_packet.source_name} in #{time} at #{speed}"
+			$stderr.puts "FTP: #{payload["file_name"]} --> #{control_message_packet.source_name} in #{time} at #{speed}"
 			return nil, {} # no packet to forward
 		else
 			begin
@@ -152,7 +152,7 @@ class ControlMessageHandler
 				control_message_packet.destination_ip, control_message_packet.source_name,
 				control_message_packet.source_ip, 0, "FTP", payload, control_message_packet.time_sent)
 
-				puts "FTP: #{control_message_packet.source_name} --> #{file_path}"
+				$stderr.puts "FTP: #{control_message_packet.source_name} --> #{file_path}"
 
 				control_message_packet.payload = payload
 				return control_message_packet, {}
@@ -160,7 +160,7 @@ class ControlMessageHandler
 			rescue Exception => e
 
 				$log.debug "FTP Exception #{e.inspect}"
-				puts "FTP: ERROR: #{control_message_packet.source_name} --> #{file_path}"
+				$stderr.puts "FTP: ERROR: #{control_message_packet.source_name} --> #{file_path}"
 
 				payload["complete"] = false
 				payload["failure"] = true
@@ -196,7 +196,7 @@ class ControlMessageHandler
 			# Check if there has been a notification for a timeout
 			if !main_processor.timeout_table[payload['unique_id']][1]	
 				main_processor.timeout_table[payload['unique_id']][1] = true
-				puts "PING ERROR: HOST UNREACHABLE"
+				$stderr.puts "PING ERROR: HOST UNREACHABLE"
 			end
 
 			return nil
@@ -214,7 +214,7 @@ class ControlMessageHandler
 			# If it is at its destination then the packet has made its
 			# round trip.
 			if control_message_packet.destination_name.eql? main_processor.source_hostname
-				puts "#{payload['SEQ_ID']} #{control_message_packet.source_name} #{main_processor.node_time - control_message_packet.time_sent}"
+				$stderr.puts "#{payload['SEQ_ID']} #{control_message_packet.source_name} #{main_processor.node_time - control_message_packet.time_sent}"
 			else
 				# Continue to travel to next node
 				return control_message_packet, {}
@@ -252,7 +252,7 @@ class ControlMessageHandler
 			if control_message_packet.destination_name.eql? main_processor.source_hostname
 				if payload["failure"]
 					$log.debug "SendMessage got back to the source but failed to fully send to recipient, payload: #{payload.inspect}"
-					puts "SENDMSG ERROR: #{control_message_packet.source_name} UNREACHABLE"
+					$stderr.puts "SENDMSG ERROR: #{control_message_packet.source_name} UNREACHABLE"
 				end
 			else
 				# hasn't gotten back to source yet, so return packet so that it'll be forwarded
@@ -267,7 +267,7 @@ class ControlMessageHandler
 					payload["failure"] = true
 				else
 					$log.debug "SendMessage got to the destination successfully, payload: #{payload.inspect}"
-					puts("SENDMSG: #{control_message_packet.source_name} --> " + payload["message"])
+					$stderr.puts("SENDMSG: #{control_message_packet.source_name} --> " + payload["message"])
 				end
 
 				payload["complete"] = true
@@ -305,7 +305,7 @@ class ControlMessageHandler
 			prev = payload["current"]
 			# Check if subscription is already in the table
 			if main_processor.subscription_table.include?(payload["unique_id"])
-				puts "ADVERTISE #{unique_id}: CONSISTENCY FAULT #{main_processor.first_subscription_node_table[unique_id]} ¿¿ #{prev}"
+				$stderr.puts "ADVERTISE #{unique_id}: CONSISTENCY FAULT #{main_processor.first_subscription_node_table[unique_id]} ¿¿ #{prev}"
 
 				return nil
 			end
@@ -317,7 +317,7 @@ class ControlMessageHandler
 
 			log.debug "Added subscription to subscription table: #{unique_id} #{main_processor.subscription_table}"
 
-			puts "#{node_list.length} NODES #{node_list} SUBSCRIBED TO #{unique_id}"
+			$stderr.puts "#{node_list.length} NODES #{node_list} SUBSCRIBED TO #{unique_id}"
 			return nil
 		else
 
@@ -350,7 +350,7 @@ class ControlMessageHandler
 				next_node = payload["next"]
 
 				# Produce output for going back to source
-				puts "ADVERTISE: #{unique_id} #{prev} --> #{next_node}"
+				$stderr.puts "ADVERTISE: #{unique_id} #{prev} --> #{next_node}"
 
 			else
 				until !payload["node_list"][destination_count].eql?(main_processor.source_hostname) && !(payload["visited"].include?(payload["node_list"][destination_count]))
@@ -369,7 +369,7 @@ class ControlMessageHandler
 				$log.debug "ADVERTISE heading to #{next_node} came from #{prev}"
 				
 				# Produce output for going to next
-				puts "ADVERTISE: #{unique_id} #{prev} --> #{control_message_packet.source_name}"
+				$stderr.puts "ADVERTISE: #{unique_id} #{prev} --> #{control_message_packet.source_name}"
 
 
 			end
@@ -402,7 +402,7 @@ class ControlMessageHandler
 					main_processor.node_time = payload["destination_time"] + round_trip_time
 
 					$log.debug "Node's (#{main_processor.source_hostname}) time is behind node (#{control_message_packet.source_name}) and is being synced."
-					puts Time.at(main_processor.node_time).strftime("CLOCKSYNC: TIME = %H:%M:%S DELTA = #{delta}")
+					$stderr.puts Time.at(main_processor.node_time).strftime("CLOCKSYNC: TIME = %H:%M:%S DELTA = #{delta}")
 				else
 					$log.debug "Node's (#{main_processor.source_hostname}) time is ahead of node (#{control_message_packet.source_name}) and should NOT be synced."
 				end
@@ -417,7 +417,7 @@ class ControlMessageHandler
 			# sync its node time if need be
 			if control_message_packet.destination_name.eql? main_processor.source_hostname
 				$log.debug "CLOCKSYNC got to the destination (#{main_processor.source_hostname} successfully.)"
-				puts Time.at(main_processor.node_time).strftime("CLOCKSYNC FROM #{control_message_packet.source_name}: TIME = %H:%M:%S")
+				$stderr.puts Time.at(main_processor.node_time).strftime("CLOCKSYNC FROM #{control_message_packet.source_name}: TIME = %H:%M:%S")
 
 				payload["destination_time"] = main_processor.node_time
 				control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
