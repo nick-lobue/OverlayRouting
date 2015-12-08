@@ -1,10 +1,15 @@
 require 'base64'
-
+require 'json'
+require 'openssl'
 require_relative 'dijkstra_executor.rb'
 
 #Handles commands from the user e.g. TRACEROUTE, CHECKSTABLE, PING 
 class Performer
 
+	#TODO delete and use actual encryption
+	def self.encrypt(key, plain)
+		return plain
+	end
 
 	#returns packets to forward
 	def self.perform_traceroute(main_processor, destination_name)
@@ -21,7 +26,7 @@ class Performer
 		payload['data'] = "0 #{main_processor.source_hostname} 0\n" #TODO hostname
 		#Starting hop time in milliseconds
 		payload["last_hop_time"] = (main_processor.node_time.to_f * 1000).ceil
-
+		payload["HOPCOUNT"] = 0
 		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
 				main_processor.source_ip, destination_name, nil, 0, "TRACEROUTE", payload,
 				main_processor.node_time)
@@ -35,7 +40,6 @@ class Performer
 		if destination_name.nil? or file_name.nil? or fpath.nil?
 			throw :invalid_argument
 		end
-
 
 		payload = Hash.new
 
@@ -183,6 +187,106 @@ class Performer
 			$stdout.puts("no")
 		else
 			$stdout.puts("yes")
+		end
+	end
+
+	#Note: I will be using the network n1 -> n2 -> n3 -> n4 as an example network here
+	def self.perform_tor(main_processor, destination_name, message)
+		
+		if main_processor.source_hostname.eql? destination_name
+			puts "Error: you can't onion route to self"
+			return
+		end
+
+		unless message.class.name.eql? "String"
+			puts "Invalid message must be of type String"
+		end
+
+		path = []
+
+		main_processor.graph_mutex.synchronize {
+			#e.g [n2, n3, n4]
+			path = DijkstraExecutor.find_path(main_processor.flooding_utility.global_top, 
+				main_processor, destination_name)
+		}
+
+		if path.empty?
+			puts "No route found"
+			return
+		end
+
+		#path.push main_processor.source_hostname
+
+		$log.debug "TOR path #{path}"
+
+		#The next hop in the series.
+		#initially it's self
+		next_hop = destination_name
+		next_hop_cmp = nil
+
+		#The last hop's payload will contain the message encrypted
+		payload = Hash.new
+		payload["TOR"] = Hash.new
+		payload["TOR"]["message"] = message
+		payload["TOR"]["complete"] = true
+
+
+		cmp = nil
+
+		#itterate the path from reverse creating a control message packet where
+		#Only the next hop can decrypt
+		#Note: will use n3 as the current hop and n4 as the next hop
+		path.each{ |hop|
+
+			if not next_hop_cmp.nil?
+				#TODO create keys mutex
+
+				payload["TOR"]["next_cmp"] = next_hop_cmp.to_json_from_cmp
+			end
+
+			#next_cmp can only be decrypted by the next_hop
+			#e.g. if curr hop is n3 then next_cmp can only be decrypted by n4
+			tor_json = JSON.generate(payload["TOR"])
+			
+
+			#payload["TOR"] = Base64.encode64(main_processor.keys[next_hop].public_encrypt(tor_json))
+
+			#generate AES key and iv
+			cipher = OpenSSL::Cipher::AES128.new(:CBC)
+			cipher.encrypt
+			key = cipher.random_key
+			iv = cipher.random_iv
+			tor_encrypted = cipher.update(tor_json) + cipher.final
+
+			payload["TOR"] = Base64.encode64(tor_encrypted)
+			$log.debug "encrypted payload[\"Tor\"] #{payload["TOR"].inspect}"
+		
+			next_hop_rsa_key = main_processor.keys[next_hop]
+			
+			while next_hop_rsa_key.nil?
+				$log.debug "Waiting to receive RSA keys for #{next_hop}"
+				sleep 1
+				next_hop_rsa_key = main_processor.keys[next_hop]
+			end
+
+			#Encrypt aes key and iv so that only the receiver of this layer can decrypt
+			encrypted_key = Base64.encode64(next_hop_rsa_key.public_encrypt(key))
+			encrypted_iv = Base64.encode64(next_hop_rsa_key.public_encrypt(iv))
+
+			#A control message packet from hop to next_hop
+			cmp = ControlMessagePacket.new(hop,
+				nil, next_hop, nil, 0, "TOR", payload, 0, {'key' => encrypted_key, 'iv' => encrypted_iv})
+
+			#clear payload for next hop
+			payload = Hash.new
+			payload["TOR"] = Hash.new
+			next_hop_cmp = cmp
+			next_hop = hop
+		}
+		if cmp.nil?
+			puts "TOR error: no path available"
+		else
+			return cmp
 		end
 	end
 

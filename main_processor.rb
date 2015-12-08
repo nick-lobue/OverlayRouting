@@ -1,6 +1,7 @@
 require 'time'
 require 'socket'
 require 'thread'
+require 'openssl'
 require 'securerandom'
 
 require_relative 'packet.rb'
@@ -22,8 +23,9 @@ $debug = true #TODO set to false on submission
 # --------------------------------------------
 class MainProcessor
 
-
-	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table, :flooding_utility, :weights_config_filepath, :nodes_config_filepath, :routing_table_updating
+	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table, 
+		:flooding_utility, :weights_config_filepath, :nodes_config_filepath, :routing_table_updating,
+		:keys, :private_key, :public_key, :graph_mutex, :timeout
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
@@ -36,6 +38,7 @@ class MainProcessor
 	PING = "^PING\s+(.+)\s+([0-9]+)\s+([0-9 | \.]+)$"
 	SEND_MESSAGE = "^SNDMSG\s+([0-9a-zA-Z\w]+)\s+(.+)$"
 	CLOCKSYNC = "^\s*CLOCKSYNC\s*$"
+	TOR = "^TOR\s+(.+)\s+(.+)$"
 
 
 	# ------------------------------------------------------
@@ -103,7 +106,15 @@ class MainProcessor
 
 		# parse files to get network information
 		parse_config_file(@config_filepath)
+		@timeout = 1 #TODO read from config file
 		extract_ip_and_port(@weights_config_filepath, @nodes_config_filepath, @source_hostname)
+
+		#generate public and private keys
+		@private_key = OpenSSL::PKey::RSA.new(2048)
+		@public_key = @private_key.public_key
+
+		#TODO get keys from lsp
+		@keys = Hash.new
 
 		#A queue containing link state packets
 		@lsp_queue = Queue.new
@@ -116,17 +127,22 @@ class MainProcessor
 
 		@port_hash = parse_port @nodes_config_filepath
 
+		@routing_table_mutex = Mutex.new
+		@graph_mutex = Mutex.new
+
 		#Create initial blank routing table
 		@routing_table = RoutingTable.blank_routing_table(@source_hostname, @source_ip)
 
-		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip, @port_hash, @weights_config_filepath)
+		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip, @port_hash, @weights_config_filepath, @public_key)
 
-		@routing_table_mutex = Mutex.new
 		@routing_table_updating = false
-		@link_state_socket = TCPServer.open(@source_port)
+		@packet_socket = TCPServer.open(@source_port)
 
-    	#flood initial link state packet
-    	@flooding_utility.initial_flood
+		@graph_mutex.synchronize {
+			#flood initial link state packet
+			@flooding_utility.initial_flood
+		}
+
 		
 		#@control_message_socket = TCPServer.open(@source_port)
 	end
@@ -140,6 +156,7 @@ class MainProcessor
 	def update_time
 		loop {
 			@node_time += 0.001
+			#@node_time = Time.now.to_f 
 			sleep(0.001)
 		}
 	end
@@ -209,33 +226,41 @@ class MainProcessor
 		while link_state_packet = @lsp_queue.pop
 			$log.debug "Processing #{link_state_packet.inspect}"
 
-			# flood the received packet, update topology graph, and update routing table
-			@flooding_utility.check_link_state_packet(link_state_packet)
+			@graph_mutex.synchronize {
+				# flood the received packet, update topology graph, and update routing table
+				@flooding_utility.check_link_state_packet(link_state_packet)
 
-			#Optimization: Process additional link state packets but without blocking
-			until @lsp_queue.empty?
-				@flooding_utility.check_link_state_packet(@lsp_queue.pop)
-			end
+				@keys[link_state_packet.source_name] = OpenSSL::PKey::RSA.new link_state_packet.public_key
+				$log.debug "Added public key #{link_state_packet.source_name} => #{@keys[link_state_packet.source_name]}"
 
-			@routing_table_updating = true
+				#Optimization: Process additional link state packets but without blocking
+				until @lsp_queue.empty?
+					link_state_packet = @lsp_queue.pop
+					@flooding_utility.check_link_state_packet(link_state_packet)
+					@keys[link_state_packet.source_name] = OpenSSL::PKey::RSA.new link_state_packet.public_key
+					$log.debug "Added public key #{link_state_packet.source_name} => #{@keys[link_state_packet.source_name]}"
+				end
 
-			#$log.debug "Global topology: #{@flooding_utility.global_top.graph.inspect}"
-			updated_routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top, @source_hostname)
+				@routing_table_updating = true
 
-			@routing_table_mutex.synchronize {
-				@routing_table = updated_routing_table
+				#$log.debug "Global topology: #{@flooding_utility.global_top.graph.inspect}"
+				updated_routing_table = DijkstraExecutor.routing_table(@flooding_utility.global_top, @source_hostname)
+
+				@routing_table_mutex.synchronize {
+					@routing_table = updated_routing_table
+				}
+
+				$log.info "Routing table updated"
+				@routing_table.print_routing if $debug
+
+				@routing_table_updating = false
 			}
-
-			$log.info "Routing table updated"
-			@routing_table.print_routing if $debug
-
-			@routing_table_updating = false
-
 		end
 	end
 
 	#TODO handle link state packets
 	#Listens to forward_queue and forwards any new packets to next hop
+	#This is outgoing not incoming. Incoming queues are cmp_queue and lsp_queue
 	def packet_forwarder
 		while packet = @forward_queue.pop
 
@@ -264,7 +289,7 @@ class MainProcessor
 						#Hopefully the routing table might display at least on them
 						#Give 5 attempts before giving up
 						Thread.new {
-							$log.error "No next route for #{packet.source_hostname} or
+							$log.error "No next route for #{packet.source_name} or
 							#{packet.destination_hostname} for packet: #{packet.inspect}"
 							sleep 1
 							packet.failures = packet.failures + 1
@@ -277,7 +302,7 @@ class MainProcessor
 						#We could continue retrying
 						#TODO maybe
 						Thread.new {
-							$log.error "No next route for #{packet.source_hostname} or
+							$log.error "No next route for #{packet.source_name} or
 							#{packet.destination_hostname} for packet: #{packet.inspect}"
 							sleep 1
 							packet.failures = packet.failures + 1
@@ -294,14 +319,15 @@ class MainProcessor
 
 				socket = TCPSocket.open(next_hop_ip, next_hop_port)
 
-				socket.puts(packet.to_json)
+
+				socket.puts(packet.to_json_from_cmp)
 
 				# Close socket in use
 				socket.close
 
 				$log.debug "Succesfully sent packet with destination: 
 				#{destination_hostname} to #{next_hop_hostname}
-				packet: #{packet.to_json.inspect}"
+				packet: #{packet.to_json_from_cmp.inspect}"
 			rescue Errno::ECONNREFUSED => e
 
 				#TODO handle this. Could mean link or node is down
@@ -335,16 +361,16 @@ class MainProcessor
 	def packet_listener
 		loop {
 
-			Thread.start(@link_state_socket.accept) do |otherNode|
+			Thread.start(@packet_socket.accept) do |otherNode|
 				received_json = ""
 
 				#receive the json data from the node
 				#parse packet and type
 				#push packets to respective queue types
-				while lsp_str = otherNode.gets
+				while packet_str = otherNode.gets
 					#parse packet and get packet type
-					packet, packet_type = Packet.from_json(lsp_str)
-					$log.debug "Received #{packet_type}: #{lsp_str}"
+					packet, packet_type = Packet.from_json(packet_str)
+					$log.debug "Received #{packet_type}: #{packet_str}"
 
 					if packet_type.eql? "LSP"
 						@lsp_queue << packet #add packet to Link State Queue
@@ -355,7 +381,6 @@ class MainProcessor
 
 				end
 
-	
 				otherNode.close
 			end
 		}
@@ -477,15 +502,28 @@ class MainProcessor
 								end
 							end
 						}
+					elsif /#{TOR}/.match(inputted_command)
+						destination = $1
+						message = $2
+
+						Thread.new {
+							packet = Performer.perform_tor(self, destination, message)
+							if packet.class.to_s.eql? "ControlMessagePacket"
+								@forward_queue << packet
+							else
+								$log.debug "Nothing to forward #{packet.class}"
+							end
+						}
 					elsif /PRINT_TIME/.match(inputted_command)
 						Thread.new {
 							puts("Current Node Time:  #{Time.at(@node_time)}")
 						}
+
 					else
 						$log.debug "Did not match anything. Input: #{inputted_command}"
 					end
 				end
-			end
+			
 		}
 	end
 

@@ -19,7 +19,7 @@ class FloodingUtil
   #n1 (outgoing ip: 10.0.0.20) -> n2
   #n1 (outgoing ip: 10.0.2.20) -> n3
   #source_ip will be {"n2" => 10.0.0.20 , "n3" => 10.0.2.20}
-  def initialize(source_name, source_ip, port_hash, config_file)
+  def initialize(source_name, source_ip, port_hash, config_file, public_key)
     
     # Set source name field which marks
     # instance of node the flooding util 
@@ -28,7 +28,7 @@ class FloodingUtil
     @source_ip = source_ip
 
     @port_hash = port_hash
-    
+    @public_key = public_key
 
     # Initialize link state table and insert
     # current source name and sequence number
@@ -42,7 +42,7 @@ class FloodingUtil
 
     # Parse config file and set fields for
     # link state instance
-    @link_state_packet = LinkStatePacket.new(@source_name, @source_ip, 0, nil)
+    @link_state_packet = LinkStatePacket.new(@source_name, @source_ip, 0, nil, @public_key)
     parse_config(config_file)
 
     # Add new neighbors to the global 
