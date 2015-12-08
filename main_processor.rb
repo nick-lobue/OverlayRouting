@@ -14,7 +14,8 @@ require_relative 'performer.rb'
 require_relative 'csp_handler.rb'
 
 $log = Logger.new(STDOUT)
-$log.level = Logger::FATAL
+#uncomment to disable logging
+#$log.level = Logger::FATAL
 $debug = true #TODO set to false on submission
 
 # --------------------------------------------
@@ -216,7 +217,10 @@ class MainProcessor
 
 
 		frag_payload = ""
+
+		#Not to be confused with frag id. This should remain the same until packet is full constructed from fragments
 		curr_seq = -1
+
 		curr_fragid = -1
 		reconstructing_frag = false
 		prev_cmp_frag = -1
@@ -229,11 +233,18 @@ class MainProcessor
 			$log.debug "received #{control_message_packet.payload.to_s} fragInfo #{control_message_packet.fragInfo}"
 
 			curr_frag_id = -1
+
+			#if this packet is part of a fragment
+			fragmented_cmp = false
+
 			if not control_message_packet.fragInfo["fragId"].nil?
 				curr_frag_id = control_message_packet.fragInfo["fragId"]
+				fragmented_cmp = true 
 			end
 
-			if reconstructing_frag and curr_seq.eql? control_message_packet.seq_numb and curr_frag_id.eql? (prev_cmp_frag + 1)
+
+			#If expecting fragments and the current seq # equals the sequence number of the initial cmp and the frag_id is the next one
+			if reconstructing_frag and fragmented_cmp and curr_seq.eql? control_message_packet.seq_numb and curr_frag_id.eql? (prev_cmp_frag + 1)
 
 				frag_payload += control_message_packet.payload
 				prev_cmp_frag += 1
@@ -256,7 +267,7 @@ class MainProcessor
 				end
 			elsif not curr_seq.eql? control_message_packet.seq_numb or not curr_frag_id.eql? (prev_cmp_frag + 1)
 
-				if curr_seq.eql? (prev_cmp_frag + 1)
+				if not curr_frag_id.eql? (prev_cmp_frag + 1) and curr_seq.eql? control_message_packet.seq_numb
 					$log.debug("Got out of order fragment: #{curr_frag_id} will drop");
 					next
 				elsif reconstructing_frag
@@ -269,7 +280,7 @@ class MainProcessor
 					prev_cmp_frag = -1
 					#TODO check if current packet is supposed to be fragmented
 
-					if control_message_packet.type.eql? "FTP"
+					if inital_cmp_frag.type.eql? "FTP"
 						#Special case inform FTP giving whatever payload we can to FTP
 						inital_cmp_frag.payload = frag_payload 
 						ControlMessageHandler.handle(self, inital_cmp_frag, {"fragmentation_failure" => true})
@@ -308,7 +319,6 @@ class MainProcessor
 
 			frag_payload = ""
 			reconstructing_frag = false
-			curr_seq = -1
 		end
 	end
 
@@ -420,7 +430,7 @@ class MainProcessor
 
 				
 				#fragment if not already fragmented and if the payload string is greater than
-				fragment = false #TODO fix fragmentation issue and enable
+				fragment = true #TODO fix fragmentation issue and enable
 				if fragment and not(packet.fragInfo["fragmented"]) and packet.payload.to_json.size >= @max_packet_size
 					$log.debug "Fragmenting"
 					

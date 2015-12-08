@@ -186,14 +186,25 @@ class ControlMessageHandler
 		end
 
 		if optional_args["fragmentation_failure"]
+
+			matches = control_message_packet.payload.match(/.*data\":\"(.*)/)
 			#Unable to reassemble fragmented packet
-			#TODO include file path in controlMessag
-			puts "FTP: ERROR: #{control_message_packet.source_name} --> TODO get file path"
+			
+			puts "FTP: ERROR: #{control_message_packet.source_name} --> #{optional_args["FPATH"]}/#{optional_args["file_name"]}"
+
+
+			payload = Hash.new
 			payload["complete"] = false
 			payload["failure"] = true
-			payload.delete "data" #clear data
+			
+			
+			payload["file_name"] = optional_args["file_name"]
+			payload["FPATH"] = optional_args["FPATH"]
 
-			payload["bytes_written"] = control_message_packet.payload.size #TODO get actual size
+
+			payload = Hash.new
+
+			payload["bytes_written"] = matches[1].size
 			$log.debug "bytes_written: #{payload["bytes_written"]}"
 
 			#Create new control message packet to send back to source but preserve original node time
