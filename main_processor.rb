@@ -25,8 +25,8 @@ class MainProcessor
 
 	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table, 
 		:flooding_utility, :weights_config_filepath, :nodes_config_filepath, :routing_table_updating,
-		:keys, :private_key, :public_key, :graph_mutex, :ping_timeout,:subscription_table,
-		:first_subscription_node_table, :timeout_table
+		:keys, :private_key, :public_key, :graph_mutex, :ping_timeout, :subscription_table,
+		:first_subscription_node_table, :timeout_table, :port_hash
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
