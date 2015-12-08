@@ -88,6 +88,68 @@ class Performer
 		control_message_packet
 	end
 
+	# -----------------------------------------------------------
+	# Construct initial packet that will be sent to the given
+	# nodes in the node list and the nodes will be added to the 
+	# subscription group 
+	# -----------------------------------------------------------
+	def self.perform_advertise(main_processor, unique_id, node_list) 
+		if main_processor.nil? or unique_id.nil? or node_list.nil?
+			throw :invalid_argument
+		end
+
+		payload = Hash.new
+
+		# Check if the only node in the node list is self
+		if node_list.length == 1 && main_processor.source_hostname.eql?(node_list[0])
+			main_processor.subscription_table[unique_id] = node_list
+			puts "1 NODE #{node_list[0]} SUBSCRIBED TO #{unique_id}"
+			return nil
+		end
+
+		# add unique subscription id and 
+		# rest of node list to payload
+		payload["unique_id"] = unique_id
+
+		# Send node list 
+		payload["node_list"] = node_list
+
+		# Use visited nodes list to determine
+		# which nodes in the nodes list has
+		# already been visited
+		payload["visited"] = Array.new
+
+		# Check if the current node should
+		# be part of the subscription
+		# Add it to table and visited if it is
+		if node_list.include?(main_processor.source_hostname)
+			payload["visited"] << main_processor.source_hostname
+
+			# Make a node a destination
+			if node_list[0].strip.eql?(main_processor.source_hostname)
+				first_destination = node_list[1].strip
+			else
+				first_destination = node_list[0].strip
+			end
+
+		# Else make the first node in the node list the first
+		# destination
+		else
+			first_destination = node_list[0].strip
+		end
+
+		# Set the previous, next, and current nodes
+		# in the payload
+		payload["prev"] = nil
+		payload["current"] = main_processor.source_hostname
+		payload["next"] = first_destination
+
+		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+				main_processor.source_ip, first_destination, nil, 0, "ADVERTISE", payload, main_processor.node_time)
+
+		control_message_packet
+	end
+
 	# -------------------------------------------------------------
 	# Creates the initial packet for a clocksync to be
 	# performed. Destination name is the node that the time

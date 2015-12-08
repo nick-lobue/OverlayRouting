@@ -27,7 +27,8 @@ class MainProcessor
 
 	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table, 
 		:flooding_utility, :weights_config_filepath, :nodes_config_filepath, :routing_table_updating,
-		:keys, :private_key, :public_key, :graph_mutex, :ping_timeout
+		:keys, :private_key, :public_key, :graph_mutex, :ping_timeout,:subscription_table,
+		:first_subscription_node_table, :timeout_table
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
@@ -39,6 +40,7 @@ class MainProcessor
 	FTP = "^FTP\s+(.+)\s+(.+)\s+(.+)$"
 	PING = "^PING\s+(.+)\s+([0-9]+)\s+([0-9 | \.]+)$"
 	SEND_MESSAGE = "^SNDMSG\s+([0-9a-zA-Z\w]+)\s+(.+)$"
+	ADVERTISE = "^ADVERTISE\s+([0-9a-zA-Z]+)\s+([[0-9a-zA-Z]+[,\s*]*]*)$"
 	CLOCKSYNC = "^\s*CLOCKSYNC\s*$"
 	TOR = "^TOR\s+(.+)\s+(.+)$"
 
@@ -137,8 +139,13 @@ class MainProcessor
 		#Create initial blank routing table
 		@routing_table = RoutingTable.blank_routing_table(@source_hostname, @source_ip)
 
+		#Create initial subscription table
+		@subscription_table = Hash.new
+		@first_subscription_node_table = Hash.new
+		
 		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip, @port_hash, @weights_config_filepath, @public_key)
 
+		@routing_table_mutex = Mutex.new
 		@routing_table_updating = false
 		@packet_socket = TCPServer.open(@source_port)
 
@@ -160,7 +167,6 @@ class MainProcessor
 	def update_time
 		loop {
 			@node_time += 0.001
-			#@node_time = Time.now.to_f 
 			sleep(0.001)
 		}
 	end
@@ -356,6 +362,8 @@ class MainProcessor
 
 			begin
 
+				#TODO should I wait until the routing table is stable to forward packet?
+				next_hop_route_entry = nil
 				@routing_table_mutex.synchronize {
 					#Forward to next hop
 					next_hop_route_entry = @routing_table[destination_hostname]
@@ -603,6 +611,13 @@ class MainProcessor
 								# Create packet
 								packet = Performer.perform_ping(self, dest_hostname, i, unique_id)
 
+								if packet.class.to_s.eql? "ControlMessagePacket"
+									@forward_queue << packet
+								else
+									$log.debug "Nothing to forward #{packet.class}"
+								end
+
+								$log.debug "ping: sleeping for #{delay}"
 								# Wait the time of the delay to send out the next ping
 								sleep(delay)
 							end
@@ -619,6 +634,18 @@ class MainProcessor
 								$log.debug "Nothing to forward #{packet.class}"
 							end
 						}
+					elsif /#{ADVERTISE}/.match(inputted_command)
+						unique_id = $1
+						node_list = $2
+
+						Thread.new {
+							packet = Performer.perform_advertise(self, unique_id, node_list.split(','))
+							if packet.class.to_s.eql? "ControlMessagePacket"
+								@forward_queue << packet
+							else
+								$log.debug "Nothing to forward #{packet.class}"
+							end
+						}		
 					elsif /#{CLOCKSYNC}/.match(inputted_command)
 						Thread.new {
 							@flooding_utility.link_state_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
