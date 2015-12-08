@@ -61,6 +61,9 @@ class Performer
 	# ------------------------------------------------------------
 	# Constructs the initial packet that'll be sent to 
 	# the given destination hostname with the provided message.
+	# @param main_processor Used to get source information.
+	# @param destination_name End destination of packet.
+	# @param message String containing message to send.
 	# ------------------------------------------------------------
 	def self.perform_send_message(main_processor, destination_name, message)
 		if main_processor.nil? or destination_name.nil? or message.nil?
@@ -88,14 +91,13 @@ class Performer
 			throw :invalid_argument
 		end
 
+		payload = Hash.new
+
 		# Check if the only node in the node list is self
 		if node_list.length == 1 && main_processor.source_hostname.eql?(node_list[0])
 			main_processor.subscription_table[unique_id] = node_list
 			puts "1 NODE #{node_list[0]} SUBSCRIBED TO #{unique_id}"
 			reutrn nil
-		end
-
-		payload = Hash.new
 
 		# add unique subscription id and 
 		# rest of node list to payload
@@ -137,8 +139,50 @@ class Performer
 		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
 				main_processor.source_ip, first_destination, nil, 0, "ADVERTISE", payload, main_processor.node_time)
 
-		control_message_packet		
+		control_message_packet
 	end
+
+	# -------------------------------------------------------------
+	# Creates the initial packet for a clocksync to be
+	# performed. Destination name is the node that the time
+	# is being retrieved from.
+	# @param main_processor Used to grab time, source, etc.
+	# @param destination_name Specifies the destination hostname.
+	# -------------------------------------------------------------
+	def self.perform_clocksync(main_processor, destination_name)
+		if main_processor.nil? or destination_name.nil?
+			throw :invalid_argument
+		end
+
+		#create control message packet
+		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+				main_processor.source_ip, destination_name, nil, 0, "CLOCKSYNC", Hash.new, main_processor.node_time)
+
+		control_message_packet
+	end
+
+	# -------------------------------------------------------------------
+	# Return the initial control message packet to be forwarded to the 
+	# destination included with a ping command
+	# -------------------------------------------------------------------
+	def self.perform_ping(main_processor, destination_name, seq_id, unique_id)
+		if destination_name.nil? or seq_id.nil? or unique_id.nil?
+			throw :invalid_argument
+
+		payload = Hash.new
+
+		# Start the sequence id at 0 initially
+		payload['SEQ_ID'] = seq_id
+
+		# Mark it with its unique_id
+		payload['unique_id'] = [unique_id, 'PING']
+
+		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+			main_processor.source_ip, destination_name, nil, 0, "PING", payload,
+			main_processor.node_time)
+
+		control_message_packet
+	end 
 
 	# --------------------------------------------------------------
 	# Perform the DUMPTABLE hook by going through the routing

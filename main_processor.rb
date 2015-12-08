@@ -1,6 +1,7 @@
 require 'time'
 require 'socket'
 require 'thread'
+require 'securerandom'
 
 require_relative 'packet.rb'
 require_relative 'link_state_packet.rb'
@@ -32,8 +33,10 @@ class MainProcessor
 
 	TRACEROUTE = "^TRACEROUTE\s+(.+)$"
 	FTP = "^FTP\s+(.+)\s+(.+)\s+(.+)$"
+	PING = "^PING\s+(.+)\s+([0-9]+)\s+([0-9 | \.]+)$"
 	SEND_MESSAGE = "^SNDMSG\s+([0-9a-zA-Z\w]+)\s+(.+)$"
 	ADVERTISE = "^ADVERTISE\s+([0-9a-zA-Z]+)\s+([[0-9a-zA-Z]+[,\s*]*]*)$"
+	CLOCKSYNC = "^\s*CLOCKSYNC\s*$"
 
 
 	# ------------------------------------------------------
@@ -50,6 +53,10 @@ class MainProcessor
 				@weights_config_filepath = $1
 			elsif line =~ /\s*nodes\s*=\s*(.+)\s*/
 				@nodes_config_filepath = $1
+			elsif line =~ /\s*maxPacketSize\s*=\s*(.+)\s*/
+				@max_packet_size = $1
+			elsif line =~ /\s*pingTimeout\s*=\s*(.+)\s*/
+				@ping_timeout = $1
 			end
 		end
 	end
@@ -88,6 +95,7 @@ class MainProcessor
 			puts "Usage: ruby main_processor.rb [config file] [source hostname]"
 		end
 
+		@timeout_table = Hash.new
 		@node_time = Time.now.to_f
 		@config_filepath = arguments[0]
 		@source_hostname = arguments[1]
@@ -137,6 +145,38 @@ class MainProcessor
 		loop {
 			@node_time += 0.001
 			sleep(0.001)
+		}
+	end
+
+	# -------------------------------------------------
+	# Constantly updates the timeout table used at each
+	# node. Will delete the specific packet entry and 
+	# print a timeout message if the message has 
+	# outlived its lifespan
+	# -------------------------------------------------
+	def update_timeout_table
+		loop {
+			@timeout_table.each do |(key, type), (n_time, notified)|
+
+				# Check first if the id in the table has outlived its lifespan
+				if @node_time - n_time > @ping_timeout
+
+					# Check if the id in the table is more than 5 mins old.
+					# This is done to allow for a lag in clean up 
+					if @node_time - n_time > 5000
+						@timeout_table.delete([key, type])
+					else
+						if type == 'PING' && !notified
+							notified = true
+							puts "PING ERROR: HOST UNREACHABLE"
+						else 
+						# if type == traceroute
+						end
+					end
+				end
+			end
+
+			sleep(1)
 		}
 	end
 
@@ -217,9 +257,9 @@ class MainProcessor
 				#If hop does not exist forward back to original node
 				if next_hop_route_entry.nil?
 
-                                  @routing_table_mutex.synchronize {
-					next_hop_route_entry = @routing_table[packet.source_name]
-                }
+                    @routing_table_mutex.synchronize {
+						next_hop_route_entry = @routing_table[packet.source_name]
+                	}
 
 					if next_hop_route_entry.nil? and packet.retries < 6
 						#Weird case source and destination can not be found
@@ -270,7 +310,12 @@ class MainProcessor
 
 				#TODO handle this. Could mean link or node is down
 				#TODO test if this handles links that are down.
-				$log.warn "Conection refused to #{neighbor_ip}:#{@port} will \
+				next_hop_route_entry = nil
+				@routing_table_mutex.synchronize {
+					next_hop_route_entry = @routing_table[packet.destination_name]
+				}
+
+				$log.warn "Connection refused to #{next_hop_route_entry}:#{@port_hash[next_hop_route_entry.next_hop.hostname]} will \
 				append to end of forward queue and try again later retry"
 
 				#Push to end of queue to try again later
@@ -389,6 +434,28 @@ class MainProcessor
 								$log.debug "Nothing to forward #{packet.class}"
 							end
 						}
+					elsif /#{PING}/.match(inputted_command)
+						dest_hostname = $1
+						num_pings = $2.to_i
+						delay = $3.to_f
+						Thread.new {
+							# Create the number of pings amount of pings
+							for i in 0..num_pings-1
+
+								# Unique id for this packet to store in the
+								# timeout table. A boolean is appended to
+								# keep track if a notification was written to 
+								# standard out or not
+								unique_id = SecureRandom.hex(8)
+								@timeout_table[['#{unique_id}', 'PING']] = [@node_time, false]
+
+								# Create packet
+								packet = Performer.perform_ping(self, dest_hostname, i, unique_id)
+
+								# Wait the time of the delay to send out the next ping
+								sleep(delay)
+							end
+						}
 					elsif /#{SEND_MESSAGE}/.match(inputted_command)
 						destination = $1
 						message = $2
@@ -413,6 +480,22 @@ class MainProcessor
 								$log.debug "Nothing to forward #{packet.class}"
 							end
 						}		
+					elsif /#{CLOCKSYNC}/.match(inputted_command)
+						Thread.new {
+							@flooding_utility.link_state_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
+								packet = Performer.perform_clocksync(self, neighbor_name)
+
+								if packet.class.to_s.eql? "ControlMessagePacket"
+									@forward_queue << packet
+								else
+									$log.debug "Nothing to forward #{packet.class}"
+								end
+							end
+						}
+					elsif /PRINT_TIME/.match(inputted_command)
+						Thread.new {
+							puts("Current Node Time:  #{Time.at(@node_time)}")
+						}
 					else
 						$log.debug "Did not match anything. Input: #{inputted_command}"
 					end
