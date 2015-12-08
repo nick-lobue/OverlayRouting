@@ -14,10 +14,8 @@ require_relative 'performer.rb'
 require_relative 'csp_handler.rb'
 
 $log = Logger.new(STDOUT)
-$log.level = Logger::DEBUG
+$log.level = Logger::FATAL
 $debug = true #TODO set to false on submission
-
-#$log.close
 
 # --------------------------------------------
 # Holds the operations needed to combine
@@ -342,7 +340,7 @@ class MainProcessor
 				}
 
 				$log.info "Routing table updated"
-				@routing_table.print_routing if $debug
+				#@routing_table.print_routing if $debug
 
 				@routing_table_updating = false
 			}
