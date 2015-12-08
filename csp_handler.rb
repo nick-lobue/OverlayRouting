@@ -613,7 +613,7 @@ class ControlMessageHandler
 
 		#only print if command started by user and not main_processor.recurring_clocksync
 		user_initiated = payload["user_initiated"]
-		puts payload.inspect
+		$log.debug payload.inspect
 
 		if payload["destination_time"]
 			# determine if packet has made a round trip

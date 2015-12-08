@@ -15,7 +15,7 @@ require_relative 'csp_handler.rb'
 
 $log = Logger.new(STDOUT)
 #uncomment to turn on logging
-#$log.level = Logger::FATAL
+$log.level = Logger::FATAL
 $debug = true #TODO set to false on submission
 
 # --------------------------------------------
@@ -139,7 +139,7 @@ class MainProcessor
 
 		@routing_table_mutex = Mutex.new
 		@graph_mutex = Mutex.new
-    @clocksync_mutex = Mutex.new
+		@clocksync_mutex = Mutex.new
 
 		#Create initial blank routing table
 		@routing_table = RoutingTable.blank_routing_table(@source_hostname, @source_ip)
@@ -557,24 +557,24 @@ class MainProcessor
 		}
 	end
 
-  def recurring_clock_update
-    loop {
-        @clocksync_mutex.synchronize {
-            @flooding_utility.link_state_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
+	def recurring_clock_update
+		loop {
+			@clocksync_mutex.synchronize {
+				@flooding_utility.link_state_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
 
-              packet = Performer.perform_clocksync(self, neighbor_name, false)
+					packet = Performer.perform_clocksync(self, neighbor_name, false)
 
-              if packet.class.to_s.eql? "ControlMessagePacket"
-                @forward_queue << packet
-              else
-                  $log.debug "Nothing to forward #{packet.class}"
-               end
-            end
+					if packet.class.to_s.eql? "ControlMessagePacket"
+						@forward_queue << packet
+					else
+						$log.debug "Nothing to forward #{packet.class}"
+					end
+				end
 
-          }
-        sleep (50)
-      }
-  end
+			}
+			sleep (10)
+		}
+	end
 
 	# --------------------------------------------
 	# Sleeps for the amount of the dumpInterval
@@ -616,7 +616,7 @@ class MainProcessor
 					Thread.new { link_state_packet_processor },
 					Thread.new { packet_forwarder },
 					Thread.new { recurring_routing_table_update },
-          Thread.new  { recurring_clock_update },
+					Thread.new  { recurring_clock_update },
 					Thread.new { recurring_dumptable } ]
 
 		loop {
