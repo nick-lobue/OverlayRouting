@@ -104,7 +104,7 @@ class Performer
 		# Check if the only node in the node list is self
 		if node_list.length == 1 && main_processor.source_hostname.eql?(node_list[0])
 			main_processor.subscription_table[unique_id] = node_list
-			puts "1 NODE #{node_list[0]} SUBSCRIBED TO #{unique_id}"
+			$stderr.puts "1 NODE #{node_list[0]} SUBSCRIBED TO #{unique_id}"
 			return nil
 		end
 
@@ -249,9 +249,9 @@ class Performer
 	# -------------------------------------------------------------------
 	def self.perform_checkstable(main_processor)
 		if (main_processor.routing_table_updating)
-			$stdout.puts("no")
+			$stderr.puts("no")
 		else
-			$stdout.puts("yes")
+			$stderr.puts("yes")
 		end
 	end
 
