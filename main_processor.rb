@@ -62,8 +62,12 @@ class MainProcessor
 				@max_packet_size = $1.to_i
 			elsif line =~ /\s*pingTimeout\s*=\s*(.+)\s*/
 				@ping_timeout = $1.to_i
+			elsif line =~ /\s*routingTables\s*=\s*(.+)\s*/
+				@routingTables = $1
+				@routingTables = @routingTables + ".csv" if @routingTables !~ /.csv/
+			elsif line =~ /\s*dumpInterval\s*=\s*(.+)\s*/
+				@dumpInterval = $1.to_f
 			end
-				
 		end
 	end
 
@@ -537,6 +541,30 @@ class MainProcessor
 		}
 	end
 
+	# --------------------------------------------
+	# Sleeps for the amount of the dumpInterval
+	# and then prints the current routing table
+	# to file specified by the routingTables
+	# file name.
+	# --------------------------------------------
+	def recurring_dumptable
+		if @dumpInterval != nil && @routingTables != nil
+			loop {
+				sleep(@dumpInterval)
+
+				# creating the file and writing routing table information
+				File.open(@routingTables, "w+") { |file|
+					if @routing_table != nil
+						@routing_table.each { |destination, info|
+							file.puts("#{@source_hostname},#{destination},#{info.distance},#{info.next_hop.hostname}")
+						}
+					end
+
+					file.close
+				}
+			}
+		end
+	end
 
 
 
@@ -552,7 +580,8 @@ class MainProcessor
 					Thread.new { packet_listener },
 					Thread.new { link_state_packet_processor },
 					Thread.new { packet_forwarder },
-					Thread.new { recurring_routing_table_update } ]
+					Thread.new { recurring_routing_table_update },
+					Thread.new { recurring_dumptable } ]
 
 		loop {
 
