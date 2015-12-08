@@ -315,7 +315,7 @@ class ControlMessageHandler
 			main_processor.first_subscription_node_table[payload["unique_id"]] = payload["current"]
 
 
-			log.debug "Added subscription to subscription table: #{unique_id} #{main_processor.subscription_table}"
+			$log.debug "Added subscription to subscription table: #{unique_id} #{main_processor.subscription_table}"
 
 			$stderr.puts "#{node_list.length} NODES #{node_list} SUBSCRIBED TO #{unique_id}"
 			return nil
@@ -357,6 +357,7 @@ class ControlMessageHandler
 					destination_count += 1
 				end
 
+				prev = payload["prev"]
 				# Recored next node
 				payload["next"] = payload["node_list"][destination_count]
 				next_node = payload["next"]
@@ -369,7 +370,7 @@ class ControlMessageHandler
 				$log.debug "ADVERTISE heading to #{next_node} came from #{prev}"
 				
 				# Produce output for going to next
-				$stderr.puts "ADVERTISE: #{unique_id} #{prev} --> #{control_message_packet.source_name}"
+				$stderr.puts "ADVERTISE: #{unique_id} #{prev} --> #{next_node}"
 
 
 			end

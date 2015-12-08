@@ -98,7 +98,7 @@ class Performer
 			main_processor.subscription_table[unique_id] = node_list
 			puts "1 NODE #{node_list[0]} SUBSCRIBED TO #{unique_id}"
 			return nil
-    end
+		end
 
 		# add unique subscription id and 
 		# rest of node list to payload
@@ -169,7 +169,7 @@ class Performer
 	def self.perform_ping(main_processor, destination_name, seq_id, unique_id)
 		if destination_name.nil? or seq_id.nil? or unique_id.nil?
 			throw :invalid_argument
-    end
+		end
 
 		payload = Hash.new
 

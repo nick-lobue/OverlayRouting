@@ -23,7 +23,8 @@ $debug = true #TODO set to false on submission
 class MainProcessor
 
 	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table, :flooding_utility, 
-	:weights_config_filepath, :nodes_config_filepath, :routing_table_updating, :subscription_table, :first_subscription_node_table
+	:weights_config_filepath, :nodes_config_filepath, :routing_table_updating, :subscription_table,
+	:first_subscription_node_table, :timeout_table
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
@@ -122,7 +123,8 @@ class MainProcessor
 
 		#Create initial subscription table
 		@subscription_table = Hash.new
-
+		@first_subscription_node_table = Hash.new
+		
 		@flooding_utility = FloodingUtil.new(@source_hostname, @source_ip, @port_hash, @weights_config_filepath)
 
 		@routing_table_mutex = Mutex.new
@@ -452,6 +454,13 @@ class MainProcessor
 								# Create packet
 								packet = Performer.perform_ping(self, dest_hostname, i, unique_id)
 
+								if packet.class.to_s.eql? "ControlMessagePacket"
+									@forward_queue << packet
+								else
+									$log.debug "Nothing to forward #{packet.class}"
+								end
+
+								$log.debug "ping: sleeping for #{delay}"
 								# Wait the time of the delay to send out the next ping
 								sleep(delay)
 							end
