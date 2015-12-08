@@ -85,13 +85,15 @@ class ControlMessageHandler
 		
 
 		payload = control_message_packet.payload
+		
+		$log.debug "payload #{payload}:#{payload.class}"
 
 		if payload["failure"]
 
 			if control_message_packet.destination_name.eql? main_processor.source_hostname
-				$log.debug "Traceroute timeout #{(main_processor.node_time.to_f ) - control_message_packet.time_sent}"
+				$log.debug "Time passed since source #{(main_processor.node_time.to_f ) - control_message_packet.time_sent}"
 				$log.debug "Failed Traceroute arrived back #{payload.inspect}"
-				puts "#{main_processor.timeout} ON #{payload["HOPCOUNT"]}"
+				puts "#{main_processor.ping_timeout} ON #{payload["HOPCOUNT"]}"
 			else
 				#Else data is complete. It is just heading back to original source
 				return control_message_packet, {}
@@ -100,9 +102,9 @@ class ControlMessageHandler
 			if control_message_packet.destination_name.eql? main_processor.source_hostname
 
 				$log.debug "Traceroute timeout #{(main_processor.node_time.to_f ) - control_message_packet.time_sent}"
-				if main_processor.timeout <= (main_processor.node_time.to_f ) - control_message_packet.time_sent
+				if main_processor.ping_timeout <= (main_processor.node_time.to_f ) - control_message_packet.time_sent
 					$log.debug "Failed Traceroute arrived back #{payload.inspect}"
-					puts "#{main_processor.timeout} ON #{payload["HOPCOUNT"]}"
+					puts "#{main_processor.ping_timeout} ON #{payload["HOPCOUNT"]}"
 				else
 					#TODO additional timeout check here
 					$log.debug "Traceroute arrived back #{payload.inspect}"
@@ -115,9 +117,9 @@ class ControlMessageHandler
 			
 		else
 
-			$log.debug "Traceroute timeout #{(main_processor.node_time.to_f ) - control_message_packet.time_sent}"
+			$log.debug "Time passed since source #{(main_processor.node_time.to_f ) - control_message_packet.time_sent}"
 			#If the timeout is less than or equal to the current time - the time the packet was sent give a failure
-			if main_processor.timeout <= (main_processor.node_time.to_f ) - control_message_packet.time_sent
+			if main_processor.ping_timeout <= (main_processor.node_time.to_f ) - control_message_packet.time_sent
 				$log.debug "Traceroute timeout #{(main_processor.node_time.to_f ) - control_message_packet.time_sent}"
 				#Update hopcount
 				payload["HOPCOUNT"] = payload["HOPCOUNT"].to_i + 1
@@ -177,6 +179,24 @@ class ControlMessageHandler
 			#packet is not for this node and we have nothing to add. Just forward it along.
 			return control_message_packet, {}
 		end
+
+		if optional_args["fragmentation_failure"]
+			#Unable to reassemble fragmented packet
+			#TODO include file path in controlMessag
+			puts "FTP: ERROR: #{control_message_packet.source_name} --> TODO get file path"
+			payload["complete"] = false
+			payload["failure"] = true
+			payload.delete "data" #clear data
+
+			payload["bytes_written"] = control_message_packet.payload.size #TODO get actual size
+			$log.debug "bytes_written: #{payload["bytes_written"]}"
+
+			#Create new control message packet to send back to source but preserve original node time
+			control_message_packet = ControlMessagePacket.new(control_message_packet.destination_name,
+			control_message_packet.destination_ip, control_message_packet.source_name,
+			control_message_packet.source_ip, 0, "FTP", payload, control_message_packet.time_sent)
+			return control_message_packet, {}
+		end 
 
 		if payload["failure"]
 			puts "FTP: ERROR: #{payload["file_name"]} --> #{control_message_packet.source_name} INTERRUPTED AFTER #{payload["bytes_written"]}"
@@ -251,7 +271,7 @@ class ControlMessageHandler
 				payload["failure"] = true
 				payload.delete "data" #clear data
 
-				payload["bytes_written"] = 0 #TODO handle partial data
+				payload["bytes_written"] = 0
 
 				#Create new control message packet to send back to source but preserve original node time
 				control_message_packet = ControlMessagePacket.new(control_message_packet.destination_name,
@@ -330,7 +350,6 @@ class ControlMessageHandler
 	# -----------------------------------------------------------
 	def self.handle_send_message_cmp(main_processor, control_message_packet, optional_args)
 		payload = control_message_packet.payload
-
 		if payload["complete"]
 			# if the packet has made a round trip, determine if it was a success or
 			# not and print the corresponding messages

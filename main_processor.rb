@@ -17,6 +17,8 @@ $log = Logger.new(STDOUT)
 $log.level = Logger::DEBUG
 $debug = true #TODO set to false on submission
 
+#$log.close
+
 # --------------------------------------------
 # Holds the operations needed to combine
 # all aspects of the program.
@@ -25,7 +27,7 @@ class MainProcessor
 
 	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table, 
 		:flooding_utility, :weights_config_filepath, :nodes_config_filepath, :routing_table_updating,
-		:keys, :private_key, :public_key, :graph_mutex, :timeout
+		:keys, :private_key, :public_key, :graph_mutex, :ping_timeout
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
@@ -49,6 +51,7 @@ class MainProcessor
 	# ------------------------------------------------------
 	def parse_config_file(config_filepath)
 		File.open(config_filepath).each do |line|
+			$log.info line
 			if line =~ /\s*updateInterval\s*=\s*(\d+)\s*/
 				@update_interval = $1.to_f
 			elsif line =~ /\s*weightFile\s*=\s*(.+)\s*/
@@ -56,10 +59,11 @@ class MainProcessor
 			elsif line =~ /\s*nodes\s*=\s*(.+)\s*/
 				@nodes_config_filepath = $1
 			elsif line =~ /\s*maxPacketSize\s*=\s*(.+)\s*/
-				@max_packet_size = $1
+				@max_packet_size = $1.to_i
 			elsif line =~ /\s*pingTimeout\s*=\s*(.+)\s*/
-				@ping_timeout = $1
+				@ping_timeout = $1.to_i
 			end
+				
 		end
 	end
 
@@ -106,7 +110,7 @@ class MainProcessor
 
 		# parse files to get network information
 		parse_config_file(@config_filepath)
-		@timeout = 1 #TODO read from config file
+		
 		extract_ip_and_port(@weights_config_filepath, @nodes_config_filepath, @source_hostname)
 
 		#generate public and private keys
@@ -202,9 +206,87 @@ class MainProcessor
 	# ---------------------------------------------------------------------
 	def control_message_listener
 
+
+		frag_payload = ""
+		curr_seq = -1
+		curr_fragid = -1
+		reconstructing_frag = false
+		prev_cmp_frag = -1
+		inital_cmp_frag = nil
+
 		#pop and process all available control message packets
 		#will block until packets pushed to queue
 		while control_message_packet = @cmp_queue.pop
+
+			$log.debug "received #{control_message_packet.payload.to_s} fragInfo #{control_message_packet.fragInfo}"
+
+			curr_frag_id = -1
+			if not control_message_packet.fragInfo["fragId"].nil?
+				curr_frag_id = control_message_packet.fragInfo["fragId"]
+			end
+
+			if reconstructing_frag and curr_seq.eql? control_message_packet.seq_numb and curr_frag_id.eql? (prev_cmp_frag + 1)
+
+				frag_payload += control_message_packet.payload
+				prev_cmp_frag += 1
+
+				if control_message_packet.fragInfo["last"]
+					#reassemble to orignal payload
+					original_payload = JSON.parse (frag_payload)
+					control_message_packet.payload = original_payload
+
+					$log.debug "Assembled fragmented packet #{original_payload}"
+
+					#clear fragmentation fields
+					control_message_packet.fragInfo = Hash.new
+					curr_seq = -1
+					reconstructing_frag = false
+					frag_payload = ""
+					prev_cmp_frag = -1
+				else
+					next
+				end
+			elsif not curr_seq.eql? control_message_packet.seq_numb or not curr_frag_id.eql? (prev_cmp_frag + 1)
+
+				if curr_seq.eql? (prev_cmp_frag + 1)
+					$log.debug("Got out of order fragment: #{curr_frag_id} will drop");
+					next
+				elsif reconstructing_frag
+					$log.info "Cannot reconstruct packet seq: #{curr_seq} prev frag id #{prev_cmp_frag} new packet frag id: #{curr_frag_id}  uncomplete payload: #{frag_payload}"
+					$log.info "ovverriding packet seq num #{control_message_packet.seq_numb}"
+					#clear data from old fragmentating packet and use fragmentation info for new packet
+					frag_payload = ""
+					reconstructing_frag = false
+					curr_seq = -1
+					prev_cmp_frag = -1
+					#TODO check if current packet is supposed to be fragmented
+
+					if control_message_packet.type.eql? "FTP"
+						#Special case inform FTP giving whatever payload we can to FTP
+						inital_cmp_frag.payload = frag_payload 
+						ControlMessageHandler.handle(self, inital_cmp_frag, {"fragmentation_failure" => true})
+					end
+				end
+
+				if control_message_packet.fragInfo["fragmented"]
+					#New packet to fragment
+
+					if not curr_frag_id.eql? 1
+						$log.debug "Received out of order initial fragment dropping. #{control_message_packet.inspect}"
+						next
+					end
+
+					$log.debug "New fragment incoming: #{control_message_packet.inspect}"
+
+					curr_seq = control_message_packet.seq_numb
+					frag_payload = control_message_packet.payload
+					reconstructing_frag = true
+					inital_cmp_frag = control_message_packet
+					prev_cmp_frag = 1
+					next
+				end
+			end
+				
 
 			#Note to Nick and Tyler: If you need to add more arguments just pass them in
 			#the optional_args hash. Then retrive it from the hash.
@@ -216,6 +298,9 @@ class MainProcessor
 				@forward_queue << packets_to_forward
 			end
 
+			frag_payload = ""
+			reconstructing_frag = false
+			curr_seq = -1
 		end
 	end
 
@@ -266,10 +351,11 @@ class MainProcessor
 
 			destination_hostname = packet.destination_name
 
+			#TODO should I wait until the routing table is stable to forward packet?
+			next_hop_route_entry = nil
+
 			begin
 
-				#TODO should I wait until the routing table is stable to forward packet?
-				next_hop_route_entry = nil
 				@routing_table_mutex.synchronize {
 					#Forward to next hop
 					next_hop_route_entry = @routing_table[destination_hostname]
@@ -290,25 +376,28 @@ class MainProcessor
 						#Give 5 attempts before giving up
 						Thread.new {
 							$log.error "No next route for #{packet.source_name} or
-							#{packet.destination_hostname} for packet: #{packet.inspect}"
+							#{packet.destination_name} for packet: #{packet.inspect}"
 							sleep 1
-							packet.failures = packet.failures + 1
+							packet.retries += 1
 							@forward_queue << packet
 						}
+						
 					elsif next_hop_route_entry.nil?
-	
+						$log.debug "Handle no next route and retry limit reached"
 					else
 						#TODO send back to parent maybe talk to Nick and Tyler about this
 						#We could continue retrying
 						#TODO maybe
 						Thread.new {
+							#Statement below doesn't seem right
 							$log.error "No next route for #{packet.source_name} or
-							#{packet.destination_hostname} for packet: #{packet.inspect}"
+							#{packet.destination_name} for packet: #{packet.inspect}"
 							sleep 1
-							packet.failures = packet.failures + 1
+							packet.retries += 1
 							@forward_queue << packet
 						}
 					end
+					next
 				end
 
 				#TODO create mutex for routing table and maybe port_hash
@@ -319,25 +408,65 @@ class MainProcessor
 
 				socket = TCPSocket.open(next_hop_ip, next_hop_port)
 
+				
+				#fragment if not already fragmented and if the payload string is greater than
+				if not packet.fragInfo["fragmented"] and packet.payload.to_json.size >= @max_packet_size
+					$log.debug "Fragmenting"
+					
 
-				socket.puts(packet.to_json_from_cmp)
+					payload_json_str = packet.payload.to_json
+					fragId = 1
+
+					#Break payload into chunks of @max_packet_size and create a
+					#new control message packet for each segment
+					payload_chunk_arr_arr = payload_json_str.chars.to_a.each_slice(@max_packet_size).to_a
+					payload_chunk_arr_arr.each_with_index.map {|payload_chunk_arr, index|
+						payload_chunk = payload_chunk_arr.join
+
+						if payload_chunk.class.name.eql? "Array"
+							payload_chunk = payload_chunk.join
+						end
+
+						#Deep copy of original packet
+						frag_packet = Marshal.load(Marshal.dump(packet))
+						
+						#copy payload chunk into packet payload
+						frag_packet.payload = payload_chunk
+
+						$log.debug ("payload chunk #{payload_chunk}:#{payload_chunk.class.name}")
+
+						#update fields
+						fragInfo = Hash.new
+						fragInfo["fragId"] = fragId
+						fragInfo["fragmented"] = true
+
+						if index == (payload_chunk_arr_arr.length - 1)
+							fragInfo["last"] = true
+						end
+
+						frag_packet.fragInfo = fragInfo
+
+						socket.puts frag_packet.to_json_from_cmp
+						fragId+= 1
+					}
+				else
+					$log.debug "not fragmenting"
+					socket.puts(packet.to_json_from_cmp)
+					$log.debug "Succesfully sent unfragmented packet with destination: 
+						#{destination_hostname} to #{next_hop_hostname}
+						packet: #{packet.to_json_from_cmp.inspect}"
+				end
 
 				# Close socket in use
 				socket.close
-
-				$log.debug "Succesfully sent packet with destination: 
-				#{destination_hostname} to #{next_hop_hostname}
-				packet: #{packet.to_json_from_cmp.inspect}"
 			rescue Errno::ECONNREFUSED => e
-
+				next_hop = "No next hop"
+				if not next_hop_route_entry.nil?
+					next_hop = next_hop_route_entry.next_hop.hostname
+				end
 				#TODO handle this. Could mean link or node is down
 				#TODO test if this handles links that are down.
-				next_hop_route_entry = nil
-				@routing_table_mutex.synchronize {
-					next_hop_route_entry = @routing_table[packet.destination_name]
-				}
-
-				$log.warn "Connection refused to #{next_hop_route_entry}:#{@port_hash[next_hop_route_entry.next_hop.hostname]} will \
+				$log.warn "Conection refused to #{next_hop} will \
 				append to end of forward queue and try again later retry"
 
 				#Push to end of queue to try again later
