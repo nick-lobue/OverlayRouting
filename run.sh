@@ -1,1 +1,1 @@
-ruby1.9.3 main_processor.rb $1 $2
+ruby1.9.3 node.rb $1 $2
