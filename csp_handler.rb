@@ -501,8 +501,7 @@ class ControlMessageHandler
 				# been visited
 				else
 					# Find node that has not already been visited
-					until !payload["node_list"][destination_count].eql?(main_processor.source_hostname) 
-						&& !(payload["visited"].include?(payload["node_list"][destination_count]))
+					until !payload["node_list"][destination_count].eql?(main_processor.source_hostname) && !(payload["visited"].include?(payload["node_list"][destination_count]))
 						destination_count += 1
 					end
 
