@@ -118,6 +118,9 @@ class Performer
 		# Send node list 
 		payload["node_list"] = node_list
 
+		# Set original source
+		payload["source"] = main_processor.source_hostname
+
 		# Use visited nodes list to determine
 		# which nodes in the nodes list has
 		# already been visited

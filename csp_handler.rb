@@ -424,7 +424,7 @@ class ControlMessageHandler
 			# final destination is part of the subscription
 
 			# First check if we are at the destination
-			if control_message_packet.destination_name.eql? main_processor.source_hostname
+			if control_message_packet.destination_name.eql? payload["source"] && payload["source"].eql? main_processor.source_hostname
 				# Output and finish passing along of packet
 				num_nodes = payload["visited"].length
 				visited = payload["visited"]
@@ -441,18 +441,27 @@ class ControlMessageHandler
 				if node_list.include?(main_processor.source_hostname)
 					# Grad index of node in visited list
 					current_index = payload["visited"].index(main_processor.source_hostname)
+					control_message_packet = nil 
 
 					# Wrap around to end of visited list if the 
 					# current index - 1 is negative. Reached end of 
 					# visited list
 					if current_index - 1 < 0
 						prev = payload["visited"][payload["visited"].length - 1] 
+
+						#
+						control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+							main_processor.source_ip, payload["source"], nil, 0, "ADVERTISE", payload, main_processor.node_time)
 					else
 						prev = payload["visited"][current_index - 1]
+
+						control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+							main_processor.source_ip, prev, nil, 0, "ADVERTISE", payload, main_processor.node_time)
 					end
 
 					# Next node will be next in the visited list
 					next_node = payload["visited"][current_index + 1]
+
 
 					# Output and foward packet along
 					$stderr.puts "ADVERTISE: #{prev} --> #{next_node}"
@@ -480,9 +489,6 @@ class ControlMessageHandler
 				if payload["visited"].length.eql? node_list.length
 					
 					payload["complete"] = true
-					control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
-						main_processor.source_ip, control_message_packet.source_name,
-						control_message_packet.source_ip, 0, "ADVERTISE", payload, main_processor.node_time)
 
 					# Previous will be the second to last node in the
 					# visited list and next will be the first node visited
@@ -490,6 +496,9 @@ class ControlMessageHandler
 					# be traveling somewhere outside of the subscription
 					prev = payload["visited"][payload["visited"].length - 2]
 					next_node = payload["visited"][0]
+
+					control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+						main_processor.source_ip, prev, nil, 0, "ADVERTISE", payload, main_processor.node_time)
 
 					# Output to stderr
 					$stderr.puts "ADVERTISE: #{prev} --> #{next_node}"
