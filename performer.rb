@@ -130,15 +130,15 @@ class Performer
 
 			# Make a node a destination
 			if node_list[0].strip.eql?(main_processor.source_hostname)
-				first_destination = node_list[1].strip
+				first_destination = node_list[1]
 			else
-				first_destination = node_list[0].strip
+				first_destination = node_list[0]
 			end
 
 		# Else make the first node in the node list the first
 		# destination
 		else
-			first_destination = node_list[0].strip
+			first_destination = node_list[0]
 		end
 
 		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,

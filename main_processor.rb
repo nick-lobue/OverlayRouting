@@ -639,7 +639,7 @@ class MainProcessor
 						node_list = $2
 
 						Thread.new {
-							packet = Performer.perform_advertise(self, unique_id, node_list.split(','))
+							packet = Performer.perform_advertise(self, unique_id, node_list.split(/\s*,\s*/))
 							if packet.class.to_s.eql? "ControlMessagePacket"
 								@forward_queue << packet
 							else
