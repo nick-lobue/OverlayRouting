@@ -208,7 +208,7 @@ class Performer
 		File.open(filename, "w+") { |file|
 			if main_processor.routing_table != nil
 				main_processor.routing_table.each { |destination, info|
-					file.puts("#{main_processor.source_hostname},#{info.destination.ip},#{info.next_hop.ip},#{info.distance}")
+					file.puts("#{main_processor.source_ip}:¡#{main_processor.source_port}¿,#{info.destination.ip}:¡#{main_processor.port_hash[destination]}¿,#{info.next_hop.ip},#{info.distance}")
 				}
 			end
 
