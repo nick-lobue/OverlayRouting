@@ -424,7 +424,7 @@ class ControlMessageHandler
 			# final destination is part of the subscription
 
 			# First check if we are at the destination
-			if control_message_packet.destination_name.eql? payload["source"] && payload["source"].eql? main_processor.source_hostname
+			if control_message_packet.destination_name.eql?(payload["source"]) && payload["source"].eql?(main_processor.source_hostname)
 				# Output and finish passing along of packet
 				num_nodes = payload["visited"].length
 				visited = payload["visited"]
