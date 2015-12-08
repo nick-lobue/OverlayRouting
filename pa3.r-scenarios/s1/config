@@ -1,5 +1,5 @@
 updateInterval=15
 weightFile=./pa3.r-scenarios/s1/weights.csv
 nodes=./pa3.r-scenarios/s1/nodes.txt
-maxPacketSize=10
+maxPacketSize=9999999
 pingTimeout=101

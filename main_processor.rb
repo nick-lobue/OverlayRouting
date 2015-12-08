@@ -14,10 +14,8 @@ require_relative 'performer.rb'
 require_relative 'csp_handler.rb'
 
 $log = Logger.new(STDOUT)
-$log.level = Logger::DEBUG
+$log.level = Logger::FATAL
 $debug = true #TODO set to false on submission
-
-#$log.close
 
 # --------------------------------------------
 # Holds the operations needed to combine
@@ -27,8 +25,8 @@ class MainProcessor
 
 	attr_accessor :source_hostname, :source_ip, :source_port, :node_time, :routing_table, 
 		:flooding_utility, :weights_config_filepath, :nodes_config_filepath, :routing_table_updating,
-		:keys, :private_key, :public_key, :graph_mutex, :ping_timeout,:subscription_table,
-		:first_subscription_node_table, :timeout_table
+		:keys, :private_key, :public_key, :graph_mutex, :ping_timeout, :subscription_table,
+		:first_subscription_node_table, :timeout_table, :port_hash
 
 	# regex constants for user commands
 	DUMPTABLE = "^DUMPTABLE\s+(.+)$"
@@ -64,8 +62,12 @@ class MainProcessor
 				@max_packet_size = $1.to_i
 			elsif line =~ /\s*pingTimeout\s*=\s*(.+)\s*/
 				@ping_timeout = $1.to_i
+			elsif line =~ /\s*routingTables\s*=\s*(.+)\s*/
+				@routingTables = $1
+				@routingTables = @routingTables + ".csv" if @routingTables !~ /.csv/
+			elsif line =~ /\s*dumpInterval\s*=\s*(.+)\s*/
+				@dumpInterval = $1.to_f
 			end
-				
 		end
 	end
 
@@ -342,7 +344,7 @@ class MainProcessor
 				}
 
 				$log.info "Routing table updated"
-				@routing_table.print_routing if $debug
+				#@routing_table.print_routing if $debug
 
 				@routing_table_updating = false
 			}
@@ -418,7 +420,8 @@ class MainProcessor
 
 				
 				#fragment if not already fragmented and if the payload string is greater than
-				if not packet.fragInfo["fragmented"] and packet.payload.to_json.size >= @max_packet_size
+				fragment = false #TODO fix fragmentation issue and enable
+				if fragment and not(packet.fragInfo["fragmented"]) and packet.payload.to_json.size >= @max_packet_size
 					$log.debug "Fragmenting"
 					
 
@@ -539,6 +542,30 @@ class MainProcessor
 		}
 	end
 
+	# --------------------------------------------
+	# Sleeps for the amount of the dumpInterval
+	# and then prints the current routing table
+	# to file specified by the routingTables
+	# file name.
+	# --------------------------------------------
+	def recurring_dumptable
+		if @dumpInterval != nil && @routingTables != nil
+			loop {
+				sleep(@dumpInterval)
+
+				# creating the file and writing routing table information
+				File.open(@routingTables, "w+") { |file|
+					if @routing_table != nil
+						@routing_table.each { |destination, info|
+							file.puts("#{@source_hostname},#{destination},#{info.distance},#{info.next_hop.hostname}")
+						}
+					end
+
+					file.close
+				}
+			}
+		end
+	end
 
 
 
@@ -554,7 +581,8 @@ class MainProcessor
 					Thread.new { packet_listener },
 					Thread.new { link_state_packet_processor },
 					Thread.new { packet_forwarder },
-					Thread.new { recurring_routing_table_update } ]
+					Thread.new { recurring_routing_table_update },
+					Thread.new { recurring_dumptable } ]
 
 		loop {
 

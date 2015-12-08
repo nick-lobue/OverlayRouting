@@ -1,3 +1,4 @@
+# encoding: UTF-8
 require 'base64'
 require 'json'
 require 'openssl'
@@ -205,7 +206,7 @@ class Performer
 		File.open(filename, "w+") { |file|
 			if main_processor.routing_table != nil
 				main_processor.routing_table.each { |destination, info|
-					file.puts("#{main_processor.source_hostname},#{info.destination.ip},#{info.next_hop.ip},#{info.distance}")
+					file.puts("#{main_processor.source_ip}:¡#{main_processor.source_port}¿,#{info.destination.ip}:¡#{main_processor.port_hash[destination]}¿,#{info.next_hop.ip},#{info.distance}")
 				}
 			end
 
@@ -245,9 +246,9 @@ class Performer
 	# -------------------------------------------------------------------
 	def self.perform_checkstable(main_processor)
 		if (main_processor.routing_table_updating)
-			$stdout.puts("no")
+			$stderr.puts("no")
 		else
-			$stdout.puts("yes")
+			$stderr.puts("yes")
 		end
 	end
 
@@ -352,10 +353,14 @@ class Performer
 	end
 
 	# ----------------------------------------------------------------
-	# Performs the SHUTDOWN command...
+	# Performs the SHUTDOWN command by flushing the stdout and
+	# stderr buffers. Then, exits the program by perform the exit
+	# system call.
 	# ----------------------------------------------------------------
 	def self.perform_shutdown(main_processor)
-		# shutdown all open sockets
-		# print current buffer information
+		$stdout.flush
+		$stderr.flush
+
+		exit
 	end
 end
