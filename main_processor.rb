@@ -16,6 +16,8 @@ $log = Logger.new(STDOUT)
 $log.level = Logger::DEBUG
 $debug = true #TODO set to false on submission
 
+#$log.close
+
 # --------------------------------------------
 # Holds the operations needed to combine
 # all aspects of the program.
@@ -169,7 +171,7 @@ class MainProcessor
 
 		frag_payload = ""
 		curr_seq = -1
-		curr_fragid = 0
+		curr_fragid = -1
 		reconstructing_frag = false
 		prev_cmp_frag = -1
 		inital_cmp_frag = nil
@@ -229,7 +231,15 @@ class MainProcessor
 				end
 
 				if control_message_packet.fragInfo["fragmented"]
-					#new packet to fragment
+					#New packet to fragment
+
+					if not curr_frag_id.eql? 1
+						$log.debug "Received out of order initial fragment dropping. #{control_message_packet.inspect}"
+						next
+					end
+
+					$log.debug "New fragment incoming: #{control_message_packet.inspect}"
+
 					curr_seq = control_message_packet.seq_numb
 					frag_payload = control_message_packet.payload
 					reconstructing_frag = true
@@ -400,14 +410,13 @@ class MainProcessor
 				else
 					$log.debug "not fragmenting"
 					socket.puts(packet.to_json_from_cmp)
+					$log.debug "Succesfully sent unfragmented packet with destination: 
+						#{destination_hostname} to #{next_hop_hostname}
+						packet: #{packet.to_json_from_cmp.inspect}"
 				end
 
 				# Close socket in use
 				socket.close
-
-				$log.debug "Succesfully sent packet with destination: 
-				#{destination_hostname} to #{next_hop_hostname}
-				packet: #{packet.to_json_from_cmp.inspect}"
 			rescue Errno::ECONNREFUSED => e
 
 				#TODO handle this. Could mean link or node is down
