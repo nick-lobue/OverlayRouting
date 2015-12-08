@@ -14,7 +14,7 @@ require_relative 'performer.rb'
 require_relative 'csp_handler.rb'
 
 $log = Logger.new(STDOUT)
-$log.level = Logger::FATAL
+#$log.level = Logger::FATAL
 $debug = true #TODO set to false on submission
 
 # --------------------------------------------
@@ -557,8 +557,9 @@ class MainProcessor
 						$log.debug "Nothing to forward #{packet.class}"
 					end
 				end
-				sleep (2)
+				
 			}
+			sleep (50)
 		}
 	end
 
@@ -699,7 +700,7 @@ class MainProcessor
 						Thread.new {
 							@clocksync_mutex.synchronize {
 								@flooding_utility.link_state_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
-									packet = Performer.perform_clocksync(self, neighbor_name)
+									packet = Performer.perform_clocksync(self, neighbor_name, true)
 									
 
 									if packet.class.to_s.eql? "ControlMessagePacket"

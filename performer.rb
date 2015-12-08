@@ -170,7 +170,7 @@ class Performer
 		#create control message packet
 		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
 				main_processor.source_ip, destination_name, nil, 0, "CLOCKSYNC", payload, main_processor.node_time)
-
+		puts control_message_packet.inspect
 		control_message_packet
 		
 	end
