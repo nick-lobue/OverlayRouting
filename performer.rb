@@ -101,9 +101,12 @@ class Performer
 
 		payload = Hash.new
 
+		# Add subscription to node subscription table. Does
+		# not matter if the node is in the subscription list.
+		main_processor.subscription_table[unique_id] = node_list
+
 		# Check if the only node in the node list is self
 		if node_list.length == 1 && main_processor.source_hostname.eql?(node_list[0])
-			main_processor.subscription_table[unique_id] = node_list
 			$stderr.puts "1 NODE #{node_list[0]} SUBSCRIBED TO #{unique_id}"
 			return nil
 		end
@@ -114,6 +117,9 @@ class Performer
 
 		# Send node list 
 		payload["node_list"] = node_list
+
+		# Set original source
+		payload["source"] = main_processor.source_hostname
 
 		# Use visited nodes list to determine
 		# which nodes in the nodes list has
@@ -128,22 +134,16 @@ class Performer
 
 			# Make a node a destination
 			if node_list[0].strip.eql?(main_processor.source_hostname)
-				first_destination = node_list[1].strip
+				first_destination = node_list[1]
 			else
-				first_destination = node_list[0].strip
+				first_destination = node_list[0]
 			end
 
 		# Else make the first node in the node list the first
 		# destination
 		else
-			first_destination = node_list[0].strip
+			first_destination = node_list[0]
 		end
-
-		# Set the previous, next, and current nodes
-		# in the payload
-		payload["prev"] = nil
-		payload["current"] = main_processor.source_hostname
-		payload["next"] = first_destination
 
 		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
 				main_processor.source_ip, first_destination, nil, 0, "ADVERTISE", payload, main_processor.node_time)

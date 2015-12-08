@@ -188,7 +188,7 @@ class MainProcessor
 
 					# Check if the id in the table is more than 5 mins old.
 					# This is done to allow for a lag in clean up 
-					if @node_time - n_time > 5000
+					if @node_time - n_time > 300000
 						@timeout_table.delete([key, type])
 					else
 						if type == 'PING' && !notified
@@ -667,7 +667,7 @@ class MainProcessor
 						node_list = $2
 
 						Thread.new {
-							packet = Performer.perform_advertise(self, unique_id, node_list.split(','))
+							packet = Performer.perform_advertise(self, unique_id, node_list.split(/\s*,\s*/))
 							if packet.class.to_s.eql? "ControlMessagePacket"
 								@forward_queue << packet
 							else
@@ -702,7 +702,6 @@ class MainProcessor
 						Thread.new {
 							puts("Current Node Time:  #{Time.at(@node_time)}")
 						}
-
 					else
 						$log.debug "Did not match anything. Input: #{inputted_command}"
 					end
