@@ -14,6 +14,8 @@ class Performer
 	#returns packets to forward
 	def self.perform_traceroute(main_processor, destination_name)
 
+		#TODO handle if source == destination_name and invalid destiantion
+
 		if destination_name.nil?
 			throw :invalid_argument
 		end

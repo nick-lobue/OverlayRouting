@@ -81,7 +81,8 @@ class ControlMessageHandler
 		#and payload["original_source_name"] == main_processor.source_hostname
 		#In that case payload["traceroute_data"] will have our data
 
-		#TODO handle timeouts
+		#TODO handle timeouts correctly talk to Tyler
+		
 
 		payload = control_message_packet.payload
 
