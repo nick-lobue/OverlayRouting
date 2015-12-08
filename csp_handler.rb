@@ -204,7 +204,13 @@ class ControlMessageHandler
 
 			payload = Hash.new
 
-			payload["bytes_written"] = matches[1].size
+			if matches.length.eql? 2
+				payload["bytes_written"] = matches[1].delete("\"").delete("}").size
+			else
+				#Fragment cutoff before data received
+				payload["bytes_written"] = 0 
+			end
+
 			$log.debug "bytes_written: #{payload["bytes_written"]}"
 
 			#Create new control message packet to send back to source but preserve original node time
