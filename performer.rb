@@ -356,10 +356,14 @@ class Performer
 	end
 
 	# ----------------------------------------------------------------
-	# Performs the SHUTDOWN command...
+	# Performs the SHUTDOWN command by flushing the stdout and
+	# stderr buffers. Then, exits the program by perform the exit
+	# system call.
 	# ----------------------------------------------------------------
 	def self.perform_shutdown(main_processor)
-		# shutdown all open sockets
-		# print current buffer information
+		$stdout.flush
+		$stderr.flush
+
+		exit
 	end
 end
