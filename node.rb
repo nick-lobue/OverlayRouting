@@ -38,9 +38,10 @@ class MainProcessor
 	FTP = "^FTP\s+(.+)\s+(.+)\s+(.+)$"
 	PING = "^PING\s+(.+)\s+([0-9]+)\s+([0-9 | \.]+)$"
 	SEND_MESSAGE = "^SNDMSG\s+([0-9a-zA-Z\w]+)\s+(.+)$"
-	ADVERTISE = "^ADVERTISE\s+([0-9a-zA-Z]+)\s+([[0-9a-zA-Z]+[,\s*]*]*)$"
+	ADVERTISE = "^ADVERTISE\s+([0-9a-zA-Z\w]+)\s+([[0-9a-zA-Z\w]+[,\s*]*]*)$"
 	CLOCKSYNC = "^\s*CLOCKSYNC\s*$"
 	TOR = "^TOR\s+(.+)\s+(.+)$"
+	POST = "^POST\s+([0-9a-zA-Z\w]+)\s+(.+)$"
 
 
 	# ------------------------------------------------------
@@ -701,6 +702,21 @@ class MainProcessor
 					elsif /PRINT_TIME/.match(inputted_command)
 						Thread.new {
 							puts("Current Node Time:  #{Time.at(@node_time)}")
+						}
+
+					elsif /#{POST}/.match(inputted_command)
+						subscription_id = $1
+						message = $2
+
+						$log.debug "About to perform a POST."
+
+						Thread.new {
+							packet = Performer.perform_post(self, subscription_id, message)
+							if packet.class.to_s.eql? "ControlMessagePacket"
+								@forward_queue << packet
+							else
+								$log.debug "Nothing to forward #{packet.class}"
+							end
 						}
 					else
 						$log.debug "Did not match anything. Input: #{inputted_command}"

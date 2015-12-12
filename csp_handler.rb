@@ -33,6 +33,8 @@ class ControlMessageHandler
             self.handle_advertise(main_processor, control_message_packet, optional_args)
 		elsif cmp_type.eql? "CLOCKSYNC"
 			self.handle_clocksync_cmp(main_processor, control_message_packet, optional_args)
+		elsif cmp_type.eql? "POST"
+			self.handle_post_cmp(main_processor, control_message_packet, optional_args)
 		else
 			$log.warn "Control Message Type: #{cmp_type} not handled"
 		end	
@@ -528,6 +530,57 @@ class ControlMessageHandler
 			else
 				return control_message_packet, {}
 			end
+		end
+	end
+
+	# -------------------------------------------------------------------
+	# Reconstructs a POST control message packet depending on the
+	# the current node that the packet is on. Returns nil if the packet
+	# has gotten back to its origin, otherwise it returns the newly
+	# modified control message packet or the original if a node is
+	# just forwarding the packet.
+	# -------------------------------------------------------------------
+	def self.handle_post_cmp(main_processor, control_message_packet, optional_args)
+		payload = control_message_packet.payload
+		received_nodes = payload["received_nodes"]
+		subscribed_nodes = payload["subscribed_nodes"]
+
+		# checking if all subscribed nodes have been hit
+		if payload["complete"]
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
+
+				# check if all nodes received the message or not
+				if received_nodes.size == main_processor.subscription_table[payload["subscription_id"]].size
+					$stderr.puts("POST #{payload['subscription_id']} DELIVERED TO #{received_nodes.size}")
+				else
+					$stderr.puts("POST FAILURE: #{payload['subscription_id']} NODES #{received_nodes.to_s} FAILED TO RECEIVE MESSAGE")
+				end
+
+				return nil, {}
+			end
+
+			return control_message_packet, {}
+		else
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
+				$stderr.puts("SENDMSG: #{control_message_packet.source_name} --> #{payload['message']}")
+
+				# add this host to the received nodes
+				received_nodes << main_processor.source_hostname
+
+				# determine to send message back to source or
+				# to the next subscribed node
+				if subscribed_nodes.empty?
+					payload["complete"] = true
+					control_message_packet.destination_name = control_message_packet.source_name
+					control_message_packet.source_name = main_processor.source_hostname
+					control_message_packet.source_ip = main_processor.source_ip
+				else
+					control_message_packet.destination_name = subscribed_nodes.pop
+				end
+			end
+
+			control_message_packet.payload = payload
+			return control_message_packet, {}
 		end
 	end
 

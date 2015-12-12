@@ -151,6 +151,35 @@ class Performer
 		control_message_packet
 	end
 
+	# ---------------------------------------------------------------
+	# Creates initial packet for the subscription POST
+	# command. The 'message' will be passed to every node
+	# in the subscription provided by subscription_id.
+	# @param main_processor Used to grab subscribed nodes, etc.
+	# @param subscription_id Id used to find nodes in subscription.
+	# @param message Message being sent to subscription.
+	# ---------------------------------------------------------------
+	def self.perform_post(main_processor, subscription_id, message)
+		if main_processor.nil? or subscription_id.nil? or message.nil?
+			throw :invalid_argument
+		end
+
+		# create payload with the nodes in the subscription
+		# and the subscription id
+		payload = Hash.new
+		payload["subscribed_nodes"] = Array.new(main_processor.subscription_table[subscription_id])
+		payload["subscription_id"] = subscription_id
+		payload["received_nodes"] = Array.new
+		payload["message"] = message
+
+		# create the initial control message packet
+		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+				main_processor.source_ip, payload["subscribed_nodes"].pop, nil, 0, "POST", 
+				payload, main_processor.node_time)
+
+		control_message_packet
+	end
+
 	# -------------------------------------------------------------
 	# Creates the initial packet for a clocksync to be
 	# performed. Destination name is the node that the time
