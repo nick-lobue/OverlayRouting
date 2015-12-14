@@ -611,6 +611,10 @@ class ControlMessageHandler
 	def self.handle_clocksync_cmp(main_processor, control_message_packet, optional_args)
 		payload = control_message_packet.payload
 
+		#only print if command started by user and not main_processor.recurring_clocksync
+		user_initiated = payload["user_initiated"]
+		$log.debug payload.inspect
+
 		if payload["destination_time"]
 			# determine if packet has made a round trip
 			if control_message_packet.destination_name.eql? main_processor.source_hostname
@@ -624,7 +628,7 @@ class ControlMessageHandler
 					main_processor.node_time = payload["destination_time"] + round_trip_time
 
 					$log.debug "Node's (#{main_processor.source_hostname}) time is behind node (#{control_message_packet.source_name}) and is being synced."
-					$stderr.puts Time.at(main_processor.node_time).strftime("CLOCKSYNC: TIME = %H:%M:%S DELTA = #{delta}")
+					$stderr.puts Time.at(main_processor.node_time).strftime("CLOCKSYNC: TIME = %H:%M:%S DELTA = #{delta}") if user_initiated
 				else
 					$log.debug "Node's (#{main_processor.source_hostname}) time is ahead of node (#{control_message_packet.source_name}) and should NOT be synced."
 				end
@@ -639,7 +643,7 @@ class ControlMessageHandler
 			# sync its node time if need be
 			if control_message_packet.destination_name.eql? main_processor.source_hostname
 				$log.debug "CLOCKSYNC got to the destination (#{main_processor.source_hostname} successfully.)"
-				$stderr.puts Time.at(main_processor.node_time).strftime("CLOCKSYNC FROM #{control_message_packet.source_name}: TIME = %H:%M:%S")
+				$stderr.puts Time.at(main_processor.node_time).strftime("CLOCKSYNC FROM #{control_message_packet.source_name}: TIME = %H:%M:%S") if user_initiated
 
 				payload["destination_time"] = main_processor.node_time
 				control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
