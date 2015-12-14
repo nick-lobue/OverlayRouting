@@ -139,6 +139,7 @@ class MainProcessor
 
 		@routing_table_mutex = Mutex.new
 		@graph_mutex = Mutex.new
+    @clocksync_mutex = Mutex.new
 
 		#Create initial blank routing table
 		@routing_table = RoutingTable.blank_routing_table(@source_hostname, @source_ip)
@@ -556,6 +557,25 @@ class MainProcessor
 		}
 	end
 
+  def recurring_clock_update
+    loop {
+        @clocksync_mutex.synchronize {
+            @flooding_utility.link_state_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
+
+              packet = Performer.perform_clocksync(self, neighbor_name, false)
+
+              if packet.class.to_s.eql? "ControlMessagePacket"
+                @forward_queue << packet
+              else
+                  $log.debug "Nothing to forward #{packet.class}"
+               end
+            end
+
+          }
+        sleep (50)
+      }
+  end
+
 	# --------------------------------------------
 	# Sleeps for the amount of the dumpInterval
 	# and then prints the current routing table
@@ -596,6 +616,7 @@ class MainProcessor
 					Thread.new { link_state_packet_processor },
 					Thread.new { packet_forwarder },
 					Thread.new { recurring_routing_table_update },
+          Thread.new  { recurring_clock_update },
 					Thread.new { recurring_dumptable } ]
 
 		loop {
@@ -688,10 +709,11 @@ class MainProcessor
 								$log.debug "Nothing to forward #{packet.class}"
 							end
 						}		
-					elsif /#{CLOCKSYNC}/.match(inputted_command)
+          elsif /#{CLOCKSYNC}/.match(inputted_command)
+            @clocksync_mutex.synchronize {
 						Thread.new {
 							@flooding_utility.link_state_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
-								packet = Performer.perform_clocksync(self, neighbor_name)
+								packet = Performer.perform_clocksync(self, neighbor_name, true)
 
 								if packet.class.to_s.eql? "ControlMessagePacket"
 									@forward_queue << packet
@@ -700,6 +722,7 @@ class MainProcessor
 								end
 							end
 						}
+            }
 					elsif /#{TOR}/.match(inputted_command)
 						destination = $1
 						message = $2
