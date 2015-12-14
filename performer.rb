@@ -101,9 +101,12 @@ class Performer
 
 		payload = Hash.new
 
+		# Add subscription to node subscription table. Does
+		# not matter if the node is in the subscription list.
+		main_processor.subscription_table[unique_id] = node_list
+
 		# Check if the only node in the node list is self
 		if node_list.length == 1 && main_processor.source_hostname.eql?(node_list[0])
-			main_processor.subscription_table[unique_id] = node_list
 			$stderr.puts "1 NODE #{node_list[0]} SUBSCRIBED TO #{unique_id}"
 			return nil
 		end
@@ -114,6 +117,9 @@ class Performer
 
 		# Send node list 
 		payload["node_list"] = node_list
+
+		# Set original source
+		payload["source"] = main_processor.source_hostname
 
 		# Use visited nodes list to determine
 		# which nodes in the nodes list has
@@ -128,25 +134,48 @@ class Performer
 
 			# Make a node a destination
 			if node_list[0].strip.eql?(main_processor.source_hostname)
-				first_destination = node_list[1].strip
+				first_destination = node_list[1]
 			else
-				first_destination = node_list[0].strip
+				first_destination = node_list[0]
 			end
 
 		# Else make the first node in the node list the first
 		# destination
 		else
-			first_destination = node_list[0].strip
+			first_destination = node_list[0]
 		end
-
-		# Set the previous, next, and current nodes
-		# in the payload
-		payload["prev"] = nil
-		payload["current"] = main_processor.source_hostname
-		payload["next"] = first_destination
 
 		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
 				main_processor.source_ip, first_destination, nil, 0, "ADVERTISE", payload, main_processor.node_time)
+
+		control_message_packet
+	end
+
+	# ---------------------------------------------------------------
+	# Creates initial packet for the subscription POST
+	# command. The 'message' will be passed to every node
+	# in the subscription provided by subscription_id.
+	# @param main_processor Used to grab subscribed nodes, etc.
+	# @param subscription_id Id used to find nodes in subscription.
+	# @param message Message being sent to subscription.
+	# ---------------------------------------------------------------
+	def self.perform_post(main_processor, subscription_id, message)
+		if main_processor.nil? or subscription_id.nil? or message.nil?
+			throw :invalid_argument
+		end
+
+		# create payload with the nodes in the subscription
+		# and the subscription id
+		payload = Hash.new
+		payload["subscribed_nodes"] = Array.new(main_processor.subscription_table[subscription_id])
+		payload["subscription_id"] = subscription_id
+		payload["received_nodes"] = Array.new
+		payload["message"] = message
+
+		# create the initial control message packet
+		control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+				main_processor.source_ip, payload["subscribed_nodes"].pop, nil, 0, "POST", 
+				payload, main_processor.node_time)
 
 		control_message_packet
 	end
@@ -361,10 +390,14 @@ class Performer
 	end
 
 	# ----------------------------------------------------------------
-	# Performs the SHUTDOWN command...
+	# Performs the SHUTDOWN command by flushing the stdout and
+	# stderr buffers. Then, exits the program by perform the exit
+	# system call.
 	# ----------------------------------------------------------------
 	def self.perform_shutdown(main_processor)
-		# shutdown all open sockets
-		# print current buffer information
+		$stdout.flush
+		$stderr.flush
+
+		exit
 	end
 end

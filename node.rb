@@ -14,7 +14,7 @@ require_relative 'performer.rb'
 require_relative 'csp_handler.rb'
 
 $log = Logger.new(STDOUT)
-#uncomment to disable logging
+#uncomment to turn on logging
 #$log.level = Logger::FATAL
 $debug = true #TODO set to false on submission
 
@@ -39,9 +39,10 @@ class MainProcessor
 	FTP = "^FTP\s+(.+)\s+(.+)\s+(.+)$"
 	PING = "^PING\s+(.+)\s+([0-9]+)\s+([0-9 | \.]+)$"
 	SEND_MESSAGE = "^SNDMSG\s+([0-9a-zA-Z\w]+)\s+(.+)$"
-	ADVERTISE = "^ADVERTISE\s+([0-9a-zA-Z]+)\s+([[0-9a-zA-Z]+[,\s*]*]*)$"
+	ADVERTISE = "^ADVERTISE\s+([0-9a-zA-Z\w]+)\s+([[0-9a-zA-Z\w]+[,\s*]*]*)$"
 	CLOCKSYNC = "^\s*CLOCKSYNC\s*$"
 	TOR = "^TOR\s+(.+)\s+(.+)$"
+	POST = "^POST\s+([0-9a-zA-Z\w]+)\s+(.+)$"
 
 
 	# ------------------------------------------------------
@@ -138,7 +139,6 @@ class MainProcessor
 
 		@routing_table_mutex = Mutex.new
 		@graph_mutex = Mutex.new
-		@clocksync_mutex = Mutex.new
 
 		#Create initial blank routing table
 		@routing_table = RoutingTable.blank_routing_table(@source_hostname, @source_ip)
@@ -234,23 +234,21 @@ class MainProcessor
 			$log.debug "received #{control_message_packet.payload.to_s} fragInfo #{control_message_packet.fragInfo}"
 
 			curr_frag_id = -1
-
 			#if this packet is part of a fragment
-			fragmented_cmp = false
+ 			fragmented_cmp = false
 
 			if not control_message_packet.fragInfo["fragId"].nil?
 				curr_frag_id = control_message_packet.fragInfo["fragId"]
-				fragmented_cmp = true 
+				fragmented_cmp = true
 			end
-
 
 			#If expecting fragments and the current seq # equals the sequence number of the initial cmp and the frag_id is the next one
 			if reconstructing_frag and fragmented_cmp and curr_seq.eql? control_message_packet.seq_numb and curr_frag_id.eql? (prev_cmp_frag + 1)
-
 				frag_payload += control_message_packet.payload
 				prev_cmp_frag += 1
 
 				if control_message_packet.fragInfo["last"]
+					$log.debug "frag string #{frag_payload}"
 					#reassemble to orignal payload
 					original_payload = JSON.parse (frag_payload)
 					control_message_packet.payload = original_payload
@@ -284,7 +282,7 @@ class MainProcessor
 					if inital_cmp_frag.type.eql? "FTP"
 						#Special case inform FTP giving whatever payload we can to FTP
 						inital_cmp_frag.payload = frag_payload 
-						ControlMessageHandler.handle(self, inital_cmp_frag, {"fragmentation_failure" => true})
+						ControlMessageHandler.handle(self, inital_cmp_frag, {"fragmentation_failure" => true, "file_name" => inital_cmp_frag.file_namefragInfo["file_name"], "FTPATH" => inital_cmp_frag.fragInfo["FPATH"]})
 					end
 				end
 
@@ -435,7 +433,6 @@ class MainProcessor
 				if fragment and not(packet.fragInfo["fragmented"]) and packet.payload.to_json.size >= @max_packet_size
 					$log.debug "Fragmenting"
 					
-
 					payload_json_str = packet.payload.to_json
 					fragId = 1
 
@@ -461,6 +458,12 @@ class MainProcessor
 						fragInfo = Hash.new
 						fragInfo["fragId"] = fragId
 						fragInfo["fragmented"] = true
+
+						if packet.type.eql? "FTP"
+							#special case for FTP
+							fragInfo["file_name"] = packet.payload["file_name"]
+							fragInfo["FPATH"] = packet.payload["FPATH"]
+						end
 
 						if index == (payload_chunk_arr_arr.length - 1)
 							fragInfo["last"] = true
@@ -553,26 +556,6 @@ class MainProcessor
 		}
 	end
 
-
-	def recurring_clock_update
-		loop {
-			@clocksync_mutex.synchronize {
-				@flooding_utility.link_state_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
-					
-					packet = Performer.perform_clocksync(self, neighbor_name, false)
-					
-					if packet.class.to_s.eql? "ControlMessagePacket"
-						@forward_queue << packet
-					else
-						$log.debug "Nothing to forward #{packet.class}"
-					end
-				end
-				
-			}
-			sleep (50)
-		}
-	end
-
 	# --------------------------------------------
 	# Sleeps for the amount of the dumpInterval
 	# and then prints the current routing table
@@ -613,7 +596,6 @@ class MainProcessor
 					Thread.new { link_state_packet_processor },
 					Thread.new { packet_forwarder },
 					Thread.new { recurring_routing_table_update },
-					Thread.new  { recurring_clock_update },
 					Thread.new { recurring_dumptable } ]
 
 		loop {
@@ -708,18 +690,15 @@ class MainProcessor
 						}		
 					elsif /#{CLOCKSYNC}/.match(inputted_command)
 						Thread.new {
-							@clocksync_mutex.synchronize {
-								@flooding_utility.link_state_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
-									packet = Performer.perform_clocksync(self, neighbor_name, true)
-									
+							@flooding_utility.link_state_packet.neighbors.keys.each do |(neighbor_name, neighbor_ip)|
+								packet = Performer.perform_clocksync(self, neighbor_name)
 
-									if packet.class.to_s.eql? "ControlMessagePacket"
-										@forward_queue << packet
-									else
-										$log.debug "Nothing to forward #{packet.class}"
-									end
+								if packet.class.to_s.eql? "ControlMessagePacket"
+									@forward_queue << packet
+								else
+									$log.debug "Nothing to forward #{packet.class}"
 								end
-							}
+							end
 						}
 					elsif /#{TOR}/.match(inputted_command)
 						destination = $1
@@ -736,6 +715,21 @@ class MainProcessor
 					elsif /PRINT_TIME/.match(inputted_command)
 						Thread.new {
 							puts("Current Node Time:  #{Time.at(@node_time)}")
+						}
+
+					elsif /#{POST}/.match(inputted_command)
+						subscription_id = $1
+						message = $2
+
+						$log.debug "About to perform a POST."
+
+						Thread.new {
+							packet = Performer.perform_post(self, subscription_id, message)
+							if packet.class.to_s.eql? "ControlMessagePacket"
+								@forward_queue << packet
+							else
+								$log.debug "Nothing to forward #{packet.class}"
+							end
 						}
 					else
 						$log.debug "Did not match anything. Input: #{inputted_command}"

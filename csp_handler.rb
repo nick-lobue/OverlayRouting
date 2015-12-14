@@ -33,6 +33,8 @@ class ControlMessageHandler
             self.handle_advertise(main_processor, control_message_packet, optional_args)
 		elsif cmp_type.eql? "CLOCKSYNC"
 			self.handle_clocksync_cmp(main_processor, control_message_packet, optional_args)
+		elsif cmp_type.eql? "POST"
+			self.handle_post_cmp(main_processor, control_message_packet, optional_args)
 		else
 			$log.warn "Control Message Type: #{cmp_type} not handled"
 		end	
@@ -184,14 +186,31 @@ class ControlMessageHandler
 		end
 
 		if optional_args["fragmentation_failure"]
+
+			matches = control_message_packet.payload.match(/.*data\":\"(.*)/)
 			#Unable to reassemble fragmented packet
-			#TODO include file path in controlMessag
-			puts "FTP: ERROR: #{control_message_packet.source_name} --> TODO get file path"
+			
+			puts "FTP: ERROR: #{control_message_packet.source_name} --> #{optional_args["FPATH"]}/#{optional_args["file_name"]}"
+
+
+			payload = Hash.new
 			payload["complete"] = false
 			payload["failure"] = true
-			payload.delete "data" #clear data
+			
+			
+			payload["file_name"] = optional_args["file_name"]
+			payload["FPATH"] = optional_args["FPATH"]
 
-			payload["bytes_written"] = control_message_packet.payload.size #TODO get actual size
+
+			payload = Hash.new
+
+			if matches.length.eql? 2
+				payload["bytes_written"] = matches[1].delete("\"").delete("}").size
+			else
+				#Fragment cutoff before data received
+				payload["bytes_written"] = 0 
+			end
+
 			$log.debug "bytes_written: #{payload["bytes_written"]}"
 
 			#Create new control message packet to send back to source but preserve original node time
@@ -402,88 +421,183 @@ class ControlMessageHandler
 		unique_id = payload["unique_id"]
 		node_list = payload["node_list"]
 
-		unless control_message_packet.destination_name.eql? main_processor.source_hostname
-			#packet is not for this node and we have nothing to add. Just forward it along.
-			return control_message_packet, {}
+		# Want to add the subscription id to every node traveled to
+		# if it is not already recorded in its table
+		if !main_processor.subscription_table.has_key?(unique_id)
+			main_processor.subscription_table[unique_id] = node_list
 		end
 
+		unless control_message_packet.destination_name.eql? main_processor.source_hostname || node_list.include?(main_processor.source_hostname)
+			# This node is not in the node list. Foward the packet along
+			# without any processing
+			return control_message_packet, {}
+		end 
+
+		# Node is on its way back to the source. This is
+		# where the outputting will be done based on the 
+		# path that was constructed in the visited array
 		if payload["complete"]
 
-			prev = payload["current"]
-			# Check if subscription is already in the table
-			if main_processor.subscription_table.include?(payload["unique_id"])
-				$stderr.puts "ADVERTISE #{unique_id}: CONSISTENCY FAULT #{main_processor.first_subscription_node_table[unique_id]} ¿¿ #{prev}"
+			# If we are at the destination then we know we have
+			# made the round trip. Need to determine if the
+			# final destination is part of the subscription
+
+			# First check if we are at the destination
+			if control_message_packet.destination_name.eql?(payload["source"]) && payload["source"].eql?(main_processor.source_hostname)
+				# Output and finish passing along of packet
+				num_nodes = payload["visited"].length
+				visited = payload["visited"]
+
+				$stderr.puts "#{num_nodes} NODES #{node_list.to_s} SUBSCRIBED TO #{unique_id}"
 
 				return nil
+
+			# If we are not at a destination we want to write
+			# to standard error the correct output and forward the 
+			# packet along
+			else
+				# Check if we are at a node in the node list
+				if node_list.include?(main_processor.source_hostname)
+					# Grad index of node in visited list
+					current_index = payload["visited"].index(main_processor.source_hostname)
+					control_message_packet = nil 
+
+					# Wrap around to end of visited list if the 
+					# current index - 1 is negative. Reached end of 
+					# visited list
+					if current_index - 1 < 0
+						prev = payload["visited"][payload["visited"].length - 1] 
+
+						#
+						control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+							main_processor.source_ip, payload["source"], nil, 0, "ADVERTISE", payload, main_processor.node_time)
+					else
+						prev = payload["visited"][current_index - 1]
+
+						control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+							main_processor.source_ip, prev, nil, 0, "ADVERTISE", payload, main_processor.node_time)
+					end
+
+					# Next node will be next in the visited list
+					next_node = payload["visited"][current_index + 1]
+
+
+					# Output and foward packet along
+					$stderr.puts "ADVERTISE: #{prev} --> #{next_node}"
+					return control_message_packet, {}
+				else
+					# Forward packet along
+					return control_message_packet, {}
+				end
 			end
 
-			# Not in table first node that the packet came on
-			main_processor.subscription_table[payload["unique_id"]] = payload["node_list"]
-			main_processor.first_subscription_node_table[payload["unique_id"]] = payload["current"]
-
-
-			$log.debug "Added subscription to subscription table: #{unique_id} #{main_processor.subscription_table}"
-
-			$stderr.puts "#{node_list.length} NODES #{node_list} SUBSCRIBED TO #{unique_id}"
-			return nil
 		else
+			# Node is on its first traversal
+			# First check if the node is at its destination and 
+			# if the packet has visited all of the nodes in the
+			# node list
 
-			# Add unique id to subscription table in the main processor
-			main_processor.subscription_table[payload["unique_id"]] = payload["node_list"]
+			# Add node to visited. Check to make sure it is not
+			# already in the visited array. Do not want duplicates
+			payload["visited"] << main_processor.source_hostname if !payload["visited"].include?(main_processor.source_hostname)
 
-			# Add current node to visited node list
-			payload["visited"] << main_processor.source_hostname
+			# At a destination 
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
+				# Made it to the end of first trip ready to turn
+				# back to source
+				if payload["visited"].length.eql? node_list.length
+					
+					payload["complete"] = true
 
-			# Record prev and current 
-			payload["prev"] = payload["current"]
-			payload["current"] = main_processor.source_hostname
+					# Previous will be the second to last node in the
+					# visited list and next will be the first node visited
+					# Note these are only the nodes displayed. Packet may
+					# be traveling somewhere outside of the subscription
+					prev = payload["visited"][payload["visited"].length - 2]
+					next_node = payload["visited"][0]
 
-			# Check if the message has reach every node in the 
-			# ndoe list
-			if payload["visited"].length == payload["node_list"].length
+					control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
+						main_processor.source_ip, prev, nil, 0, "ADVERTISE", payload, main_processor.node_time)
 
-				# Record next node
-				payload["next"] = control_message_packet.source_name
+					# Output to stderr
+					$stderr.puts "ADVERTISE: #{prev} --> #{next_node}"
 
-				payload["complete"] = true
-				control_message_packet = ControlMessagePacket.new(main_processor.source_hostname,
-					main_processor.source_ip, control_message_packet.source_name,
-					control_message_packet.source_ip, 0, "ADVERTISE", payload, main_processor.node_time)
+					return control_message_packet
 
-				$log.debug "ADVERTISE heading back to source"
+				# Did not visit every node. Need to pick another
+				# destination to travel to that has not already 
+				# been visited
+				else
+					# Find node that has not already been visited
+					until !payload["node_list"][destination_count].eql?(main_processor.source_hostname) && !(payload["visited"].include?(payload["node_list"][destination_count]))
+						destination_count += 1
+					end
 
+					# Create new control message packet to foward with new destination 
+					control_message_packet = ControlMessagePacket.new(control_message_packet.source_name,
+						control_message_packet.source_ip, payload["node_list"][destination_count], 
+						nil, 0, "ADVERTISE", payload, main_processor.node_time)
 
-				prev = payload["prev"]
-				next_node = payload["next"]
-
-				# Produce output for going back to source
-				$stderr.puts "ADVERTISE: #{unique_id} #{prev} --> #{next_node}"
-
-			else
-				until !payload["node_list"][destination_count].eql?(main_processor.source_hostname) && !(payload["visited"].include?(payload["node_list"][destination_count]))
-					destination_count += 1
+					# Foward packet
+					return control_message_packet, {}
 				end
 
-				prev = payload["prev"]
-				# Recored next node
-				payload["next"] = payload["node_list"][destination_count]
-				next_node = payload["next"]
+			# Not at a destination but in the node list.
+			# Foward packet along
+			else
+				return control_message_packet, {}
+			end
+		end
+	end
 
-				control_message_packet = ControlMessagePacket.new(control_message_packet.source_name,
-					control_message_packet.source_ip, payload["node_list"][destination_count], 
-					nil, 0, "ADVERTISE", payload, main_processor.node_time)
+	# -------------------------------------------------------------------
+	# Reconstructs a POST control message packet depending on the
+	# the current node that the packet is on. Returns nil if the packet
+	# has gotten back to its origin, otherwise it returns the newly
+	# modified control message packet or the original if a node is
+	# just forwarding the packet.
+	# -------------------------------------------------------------------
+	def self.handle_post_cmp(main_processor, control_message_packet, optional_args)
+		payload = control_message_packet.payload
+		received_nodes = payload["received_nodes"]
+		subscribed_nodes = payload["subscribed_nodes"]
 
+		# checking if all subscribed nodes have been hit
+		if payload["complete"]
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
 
-				$log.debug "ADVERTISE heading to #{next_node} came from #{prev}"
-				
-				# Produce output for going to next
-				$stderr.puts "ADVERTISE: #{unique_id} #{prev} --> #{next_node}"
+				# check if all nodes received the message or not
+				if received_nodes.size == main_processor.subscription_table[payload["subscription_id"]].size
+					$stderr.puts("POST #{payload['subscription_id']} DELIVERED TO #{received_nodes.size}")
+				else
+					$stderr.puts("POST FAILURE: #{payload['subscription_id']} NODES #{received_nodes.to_s} FAILED TO RECEIVE MESSAGE")
+				end
 
+				return nil, {}
+			end
 
+			return control_message_packet, {}
+		else
+			if control_message_packet.destination_name.eql? main_processor.source_hostname
+				$stderr.puts("SENDMSG: #{control_message_packet.source_name} --> #{payload['message']}")
+
+				# add this host to the received nodes
+				received_nodes << main_processor.source_hostname
+
+				# determine to send message back to source or
+				# to the next subscribed node
+				if subscribed_nodes.empty?
+					payload["complete"] = true
+					control_message_packet.destination_name = control_message_packet.source_name
+					control_message_packet.source_name = main_processor.source_hostname
+					control_message_packet.source_ip = main_processor.source_ip
+				else
+					control_message_packet.destination_name = subscribed_nodes.pop
+				end
 			end
 
 			control_message_packet.payload = payload
-			return control_message_packet, {}			
+			return control_message_packet, {}
 		end
 	end
 

@@ -1,1 +1,1 @@
-ruby1.9.3 main_processor.rb pa3.r-scenarios/s1/config n2
+ruby1.9.3 node.rb pa3.r-scenarios/s1/config n2
