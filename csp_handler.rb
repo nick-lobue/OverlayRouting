@@ -623,15 +623,17 @@ class ControlMessageHandler
 
 				# determine if this node's time needs to be synced 
 				needs_syncing = Time.at(main_processor.node_time) <=> Time.at(payload["destination_time"] + round_trip_time)
+				delta = (payload["destination_time"] + round_trip_time - main_processor.node_time)
 				if needs_syncing == -1
-					delta = (payload["destination_time"] + round_trip_time - main_processor.node_time)
 					main_processor.node_time = payload["destination_time"] + round_trip_time
 
 					$log.debug "Node's (#{main_processor.source_hostname}) time is behind node (#{control_message_packet.source_name}) and is being synced."
-					$stderr.puts Time.at(main_processor.node_time).strftime("CLOCKSYNC: TIME = %H:%M:%S DELTA = #{delta}") if user_initiated
 				else
+					delta = 0
 					$log.debug "Node's (#{main_processor.source_hostname}) time is ahead of node (#{control_message_packet.source_name}) and should NOT be synced."
 				end
+
+				$stderr.puts Time.at(main_processor.node_time).strftime("CLOCKSYNC: TIME = %H:%M:%S DELTA = #{delta}") if user_initiated
 
 				return nil, {}  # return nil because packet has made a round trip
 			else
